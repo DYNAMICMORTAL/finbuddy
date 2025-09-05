@@ -94,14 +94,14 @@ body {
     display: grid;
     grid-template-columns: 75% 25%;
     overflow-y: auto; /* Enables vertical scrolling */
-    background: var(--bg-body); /* Ensure consistent background color */
+    background: var(--bg-body);
   }
 
 
   .left-content {
     padding: 20px;
-    max-height: calc(100vh - 20px); /* Ensures height fits the viewport */
-    overflow-y: auto; /* Adds scrolling for the left content if needed */
+    max-height: calc(100vh - 20px);
+    overflow-y: auto;
   }
   
   .right-content {
