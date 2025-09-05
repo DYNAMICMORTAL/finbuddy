@@ -75,6 +75,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 ################ Initialize Groq client #########
 groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
 ########## End #################
 
 # Indian Stock Market API base configuration
