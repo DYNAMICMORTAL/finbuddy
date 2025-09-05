@@ -1,0 +1,21 @@
+version: 2
+
+services:
+  - type: web
+    name: finbuddy
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "./start.sh"
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+    disk:
+      name: finbuddy-disk
+      mountPath: /opt/render/project/instance
+      sizeGB: 1

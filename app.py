@@ -42,6 +42,7 @@ load_dotenv()
 
 from google import genai
 from google.genai import types
+from market_data_fallback import get_fallback_quote, get_fallback_trending, get_fallback_historical
 
 # import firebase_admin
 # from firebase_admin import credentials, auth
@@ -59,19 +60,25 @@ def bypass_auth():
     session['email'] = 'anonymous@example.com'
     session['name'] = 'Anonymous'
 
-
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['SECRET_KEY'] = 'your_secret_key_here'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///notes.db'
+# Production-ready configuration
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your_secret_key_here')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['FOLDERS'] = 'folders'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///instance/notes.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize TinyDB
 tdb = TinyDB('data/query_history.json')
+
 # Create folders if they do not exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['FOLDERS'], exist_ok=True)
+os.makedirs('instance', exist_ok=True)
 os.makedirs('data', exist_ok=True)
+os.makedirs('static/audio', exist_ok=True)
+
+# Initialize SQLAlchemy
 db = SQLAlchemy(app)
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 ################ Initialize Groq client #########
 groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
@@ -291,19 +298,19 @@ def orchestrator(query):
         try:
             response = client.models.generate_content(
                 model="gemini-2.0-flash",
-                contents=contents,
+                contents=contents[0] if contents else [],
                 config=generate_content_config,
             )
             
             # Parse the response
-            decision_text = response.text
+            decision_text = response.text if response.text else ""
             # Extract JSON from the response
-            if "```json" in decision_text:
+            if decision_text and "```json" in decision_text:
                 json_str = decision_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in decision_text:
+            elif decision_text and "```" in decision_text:
                 json_str = decision_text.split("```")[1].strip()
             else:
-                json_str = decision_text.strip()
+                json_str = decision_text.strip() if decision_text else "{}"
             
             try:
                 decision = json.loads(json_str)
@@ -400,10 +407,10 @@ def get_gemini_response(user_query, conversation_history=""):
         try:
             response = client.models.generate_content(
                 model="gemini-1.5-flash",
-                contents=contents,
+                contents=contents[0] if contents else [],
                 config=generate_content_config,
             )
-            return response.text
+            return response.text if response.text else ""
         except Exception as model_error:
             print(f"Error generating content: {model_error}")
             # Check for specific error types
@@ -464,6 +471,9 @@ def ask():
     """
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
+    
+    if not request.json:
+        return jsonify({"error": "Invalid JSON request"}), 400
     
     query = request.json.get('query', '')
     
@@ -637,6 +647,15 @@ def parse_input(input_text):
 def landingpage():
     return render_template('landingpage.html', active_page='home')
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Render.com monitoring"""
+    return jsonify({
+        'status': 'healthy',
+        'message': 'FinBuddy is running successfully',
+        'timestamp': datetime.now().isoformat()
+    }), 200
+
 @app.route('/signin')
 def signin():
     # Directly redirect to chatbot
@@ -646,6 +665,9 @@ def signin():
 def authenticate():
     try:
         # Get the ID token from the request
+        if not request.json:
+            return jsonify({'error': 'Invalid JSON request'}), 400
+            
         id_token = request.json.get('idToken')
         if not id_token:
             return jsonify({'error': 'No ID token provided'}), 400
@@ -671,15 +693,15 @@ def authenticate():
         # session['email'] = email
         # session['name'] = name
         
-        # return jsonify({
-        #     'success': True,
-        #     'redirect': url_for('chatbot'),
-        #     'user': {
-        #         'id': user_id,
-        #         'email': email,
-        #         'name': name
-        #     }
-        # })
+        return jsonify({
+            'success': True,
+            'redirect': url_for('chatbot'),
+            'user': {
+                'id': 'demo_user',
+                'email': 'demo@example.com',
+                'name': 'Demo User'
+            }
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 401
 
@@ -826,13 +848,12 @@ def new_note():
         except:
             pass
     
-    note = Note(
-        title=title,
-        content=content,
-        color=color,
-        note_type=note_type,
-        due_date=due_date
-    )
+    note = Note()
+    note.title = title or ''
+    note.content = content or ''
+    note.color = color
+    note.note_type = note_type
+    note.due_date = due_date
     db.session.add(note)
     db.session.commit()
     return redirect(url_for('notes'))
@@ -882,7 +903,7 @@ def test_generate():
 
         # Make sure noOfQues is valid
         try:
-            noOfQues = int(noOfQues)
+            noOfQues = int(noOfQues) if noOfQues else 5
             if noOfQues < 1:
                 noOfQues = 5  # Default to 5 questions if invalid
         except (ValueError, TypeError):
@@ -962,7 +983,7 @@ def test_generate():
                     qna_text = completion.choices[0].message.content
                     
                     # Don't strip all special characters, just clean up a bit
-                    qna_text_cleaned = qna_text.replace('"', '').replace('"', '')
+                    qna_text_cleaned = qna_text.replace('"', '').replace('"', '') if qna_text else ""
                 except Exception as e:
                     print(f"Error calling Groq API: {str(e)}")
                     flash(f"Error generating flashcards: {str(e)}", "danger")
@@ -1018,7 +1039,7 @@ def test_generate():
                         )
                         
                         qna_text = completion.choices[0].message.content
-                        qna_text_cleaned = qna_text.replace('"', '').replace('"', '')
+                        qna_text_cleaned = qna_text.replace('"', '').replace('"', '') if qna_text else ""
                     except Exception as e:
                         print(f"Error in retry attempt: {str(e)}")
                         # Create a default item instead of showing an error
@@ -1068,6 +1089,9 @@ def test_generate():
         else:
             flash('Error Occurred!')
             return redirect(url_for('Qna'))
+    
+    # Default return for GET requests
+    return redirect(url_for('Qna'))
 
 # Function to generate a paragraph
 def generate_paragraph(topic):
@@ -1101,7 +1125,7 @@ def generate_topic():#essay
         top_p=1,
     )
     
-    return completion.choices[0].message.content.strip()
+    return completion.choices[0].message.content.strip() if completion.choices[0].message.content else ""
 
 @app.route('/get_topic', methods=['GET'])
 def get_topic():
@@ -1184,7 +1208,7 @@ def evaluate_essay(topic, essay):
     response = completion.choices[0].message.content
     
     try:
-        lines = response.split('\n')
+        lines = response.split('\n') if response else []
         score_line = next((line for line in lines if line.startswith('SCORE:')), '')
         feedback_line = next((line for line in lines if line.startswith('FEEDBACK:')), '')
         
@@ -1218,6 +1242,9 @@ def generate():
 
 @app.route('/evaluatereading', methods=['POST'])
 def evaluate():
+    if not request.json:
+        return jsonify({'error': 'Invalid JSON request'}), 400
+        
     data = request.json
     generated_paragraph = data.get('paragraph')
     transcribed_text = data.get('transcription')
@@ -1343,6 +1370,9 @@ def evaluate_Laccuracy(generated_paragraph, transcribed_text):
 
 @app.route('/evaluatelistening', methods=['POST'])
 def evaluatelistening():
+    if not request.json:
+        return jsonify({'error': 'Invalid JSON request'}), 400
+        
     task_data = session.get('task_data', [])
     score, feedback = evaluate_Laccuracy(session['current_paragraph'], request.json['transcription'])
 
@@ -1417,21 +1447,21 @@ def upload_file():
     folder = request.form.get('folder', '')
     subfolder = request.form.get('subfolder', '')
 
-    if file and file.filename.endswith('.pdf'):
+    if file and file.filename and file.filename.endswith('.pdf'):
         filename = file.filename
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], filename) if app.config['UPLOAD_FOLDER'] else ""
         file.save(upload_path)
         if folder:
             if subfolder:
-                folder_path = os.path.join(app.config['FOLDERS'], folder, subfolder)
+                folder_path = os.path.join(app.config.get('FOLDERS', ''), folder, subfolder) if app.config.get('FOLDERS') else ""
             else:
-                folder_path = os.path.join(app.config['FOLDERS'], folder)
+                folder_path = os.path.join(app.config.get('FOLDERS', ''), folder) if app.config.get('FOLDERS') else ""
             os.makedirs(folder_path, exist_ok=True)
             shutil.move(upload_path, os.path.join(folder_path, filename))
         else:
             # If no folder is selected, save in a default location
             default_folder = 'Default'
-            folder_path = os.path.join(app.config['FOLDERS'], default_folder)
+            folder_path = os.path.join(app.config.get('FOLDERS', ''), default_folder) if app.config.get('FOLDERS') else ""
             os.makedirs(folder_path, exist_ok=True)
             shutil.move(upload_path, os.path.join(folder_path, filename))
     return redirect(url_for('pdfmanage'))
@@ -1482,10 +1512,14 @@ def view_pdf(folder, subfolder=None, filename=None):
 @app.route('/serve_pdf/<folder>/<subfolder>/<filename>')
 @app.route('/serve_pdf/<folder>/<filename>')
 def serve_pdf(folder, subfolder=None, filename=None):
+    folders_base = app.config.get('FOLDERS', '')
+    if not folders_base:
+        return "Configuration error.", 500
+        
     if subfolder:
-        file_path = os.path.join(app.config['FOLDERS'], folder, subfolder, filename)
+        file_path = os.path.join(folders_base, folder, subfolder, filename)
     else:
-        file_path = os.path.join(app.config['FOLDERS'], folder, filename)
+        file_path = os.path.join(folders_base, folder, filename)
     
     print(f"Serving PDF from: {file_path}")  # Debugging statement
     
@@ -1542,6 +1576,9 @@ def get_query_history(folder, subfolder=None, filename=None):
 
 @app.route('/delete_query', methods=['POST'])
 def delete_query():
+    if not request.json:
+        return jsonify({'error': 'Invalid JSON request'}), 400
+        
     data = request.json
     query_id = data.get('query_id')
     if query_id:
@@ -1551,6 +1588,9 @@ def delete_query():
 
 @app.route('/query_rag', methods=['POST'])
 def query_rag():
+    if not request.json:
+        return jsonify({'error': 'Invalid JSON request'}), 400
+        
     data = request.json
     query = data.get('query')
     filename = data.get('filename')
@@ -1600,10 +1640,10 @@ def create_note():
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=16)
-    pdf.cell(200, 10, txt=title, ln=1, align='C')
+    pdf.cell(200, 10, title or "", ln=1, align='C')
     
     pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, txt=content)
+    pdf.multi_cell(0, 10, content or "")
     
     # Create notes folder if it doesn't exist
     notes_folder = os.path.join(app.config['FOLDERS'], 'your_notes')
@@ -1619,10 +1659,14 @@ def create_note():
 @app.route('/delete_pdf/<folder>/<filename>')
 @app.route('/delete_pdf/<folder>/<subfolder>/<filename>')
 def delete_pdf(folder, subfolder=None, filename=None):
+    folders_base = app.config.get('FOLDERS', '')
+    if not folders_base:
+        return "Configuration error.", 500
+        
     if subfolder:
-        file_path = os.path.join(app.config['FOLDERS'], folder, subfolder, filename)
+        file_path = os.path.join(folders_base, folder, subfolder, filename)
     else:
-        file_path = os.path.join(app.config['FOLDERS'], folder, filename)
+        file_path = os.path.join(folders_base, folder, filename)
     
     if os.path.exists(file_path):
         os.remove(file_path)
@@ -2071,6 +2115,9 @@ def start_quiz():
 
 @app.route('/update-question-status', methods=['POST'])
 def update_question_status():
+    if not request.json:
+        return jsonify({'error': 'Invalid JSON request'}), 400
+        
     data = request.json
     question_index = data.get('questionIndex')
     status = data.get('status')
@@ -2103,7 +2150,7 @@ def quiz():
     start_time = session.get('start_time')
     difficulty = session.get('difficulty')
     
-    total_time = QUIZ_CONFIG[difficulty]['time'] * 60
+    total_time = QUIZ_CONFIG.get(difficulty, {}).get('time', 30) * 60 if difficulty else 30 * 60
     elapsed_time = int(time.time()) - start_time if start_time else 0
     remaining_time = max(0, total_time - elapsed_time)
     
@@ -2227,9 +2274,13 @@ def search_arxiv(query: str) -> str:
         
         results = []
         for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
-            title = entry.find("{http://www.w3.org/2005/Atom}title").text.strip()
-            summary = entry.find("{http://www.w3.org/2005/Atom}summary").text.strip()
-            url = entry.find("{http://www.w3.org/2005/Atom}id").text.strip()
+            title_elem = entry.find("{http://www.w3.org/2005/Atom}title")
+            summary_elem = entry.find("{http://www.w3.org/2005/Atom}summary")
+            url_elem = entry.find("{http://www.w3.org/2005/Atom}id")
+            
+            title = title_elem.text.strip() if title_elem is not None and title_elem.text else ""
+            summary = summary_elem.text.strip() if summary_elem is not None and summary_elem.text else ""
+            url = url_elem.text.strip() if url_elem is not None and url_elem.text else ""
             
             # Truncate summary if too long
             if len(summary) > 300:
@@ -2350,6 +2401,9 @@ def research():
 @app.route('/search', methods=['POST'])
 def search():
     try:
+        if not request.json:
+            return jsonify({'error': 'Invalid JSON request'}), 400
+            
         user_input = request.json.get('query')
         if not user_input:
             return jsonify({'error': 'No query provided'}), 400
@@ -2368,6 +2422,9 @@ from google.auth.transport.requests import Request
 
 @app.route('/auth/google', methods=['POST'])
 def google_auth():
+    if not request.json:
+        return jsonify({'error': 'Invalid JSON request'}), 400
+        
     token = request.json.get('id_token')
     try:
         request_instance = Request()
@@ -2836,6 +2893,8 @@ def profile():
         'email': user_email,
         'name': user_name
     }
+    
+    return render_template('profile.html', user=user_data)
     
 @app.route('/admin/seed-course-data')
 def seed_course_data():
