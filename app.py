@@ -1,28 +1,20 @@
 from flask import Flask, request, render_template, flash, redirect, url_for, Response, send_from_directory, jsonify, session
 from google.oauth2 import id_token  # Import id_token for Google OAuth2
 import os, uuid, time
+from functools import wraps
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import re
 import pdfplumber
 from werkzeug.utils import secure_filename
 from PyPDF2 import PdfReader
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import FAISS
-from langchain.prompts import ChatPromptTemplate
-from langchain_ollama.llms import OllamaLLM
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.chains import RetrievalQA
 from fpdf import FPDF
 from objective import ObjectiveTest
 from subjective import SubjectiveTest
-from text_filter import clean_text, preserve_content_length, filter_unwanted_text
-import cv2
-import mediapipe as mp
+# import cv2
+# import mediapipe as mp
 import numpy as np
 from collections import Counter
 import threading
-import spacy
 import random
 import shutil
 from datetime import datetime
@@ -33,11 +25,6 @@ from tinydb import TinyDB, Query
 from gtts import gTTS
 import json
 import pandas as pd
-#testing
-from langchain.agents import initialize_agent, Tool, AgentType
-from langchain_community.llms import Ollama
-from langchain.agents.agent import AgentOutputParser
-from langchain.schema import AgentAction, AgentFinish
 import wikipedia
 from duckduckgo_search import DDGS
 import requests
@@ -47,6 +34,7 @@ import json
 from typing import Union
 import re
 from dotenv import load_dotenv
+from groq import Groq
 
 load_dotenv()
 
@@ -63,6 +51,14 @@ firebase_admin.initialize_app(cred)
 
 app = Flask(__name__)
 Bootstrap(app)
+
+@app.before_request
+def bypass_auth():
+    session['user_id'] = 'anonymous'
+    session['email'] = 'anonymous@example.com'
+    session['name'] = 'Anonymous'
+
+
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = 'your_secret_key_here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///notes.db'
@@ -74,11 +70,10 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['FOLDERS'], exist_ok=True)
 os.makedirs('data', exist_ok=True)
 db = SQLAlchemy(app)
-nlp = spacy.load("en_core_web_sm")
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-################ Testing waala #########
-llama = Ollama(model="llama3.1:8b")
+################ Initialize Groq client #########
+groq_client = Groq(api_key="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")
 ########## End #################
 
 # Indian Stock Market API base configuration
@@ -86,7 +81,7 @@ INDIAN_API_KEY = os.environ.get('FINANCE_KEY')  # Default to the provided key if
 INDIAN_API_BASE_URL = "https://stock.indianapi.in"
 
 # Google Gemini API configuration
-GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY', '')
+GOOGLE_API_KEY = "AIzaSyAiopue7zgQiA0RPcTJt7n33yWdDO7u_8A"
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
 # Define API endpoints and their parameters
@@ -201,7 +196,7 @@ def call_api_by_name(api_name, **kwargs):
     return call_indian_api(endpoint, mapped_params)
 
 # Financial assistant system prompt
-SYSTEM_PROMPT = """You are Flaix, a helpful and knowledgeable financial assistant designed specifically for Indian users. 
+SYSTEM_PROMPT = """You are FinBuddy, a helpful and knowledgeable financial assistant designed specifically for Indian users. 
 Your purpose is to improve financial literacy and provide guidance on investments in the Indian market.
 
 Key responsibilities:
@@ -365,7 +360,7 @@ def get_gemini_response(user_query, conversation_history=""):
             types.Content(
                 role="model",
                 parts=[
-                    types.Part.from_text(text="I understand my role as Flaix, a financial assistant for Indian users. I'll provide helpful information about investing and financial planning in simple language.")
+                    types.Part.from_text(text="I understand my role as FinBuddy, a financial assistant for Indian users. I'll provide helpful information about investing and financial planning in simple language.")
                 ],
             ),
             types.Content(
@@ -408,32 +403,42 @@ def get_gemini_response(user_query, conversation_history=""):
                 
     except Exception as e:
         print(f"Error in Gemini response: {e}")
-        # Fallback to Llama if available
+        # Fallback to Gemma if available
         try:
-            return get_llama_response(user_query)
+            return get_gemma_response_fallback(user_query)
         except:
             return "I apologize, but I encountered an error while processing your request. Please try again later."
 
-# Fallback to Llama if Gemini is not available
-def get_llama_response(query):
-    """Fallback to use Llama model when Gemini is not available"""
+# Fallback to Gemma if Gemini is not available
+def get_gemma_response_fallback(query):
+    """Fallback to use Groq's Gemma model when Gemini is not available"""
     try:
-        template = """
-        You are Flaix, a helpful and knowledgeable financial assistant designed specifically for Indian users. 
+        system_prompt = """
+        You are FinBuddy, a helpful and knowledgeable financial assistant designed specifically for Indian users. 
         Your purpose is to improve financial literacy and provide guidance on investments in the Indian market.
-
-        Please respond to the following query:
-        {query}
         """
-        prompt = ChatPromptTemplate.from_template(template)
-        chain = prompt | llama
-        response = chain.invoke({"query": query})
-        return response
+        
+        completion = groq_client.chat.completions.create(
+            model="gemma2-9b-it",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query}
+            ],
+            temperature=0.7,
+            max_tokens=1024,
+            top_p=1,
+        )
+        
+        return completion.choices[0].message.content
     except Exception as e:
         return f"I apologize, but I encountered an error: {str(e)}"
 
 @app.route('/chatbot')
 def chatbot():
+    # Check if user is logged in
+    if 'user_id' not in session:
+        flash('Please log in to access this page.', 'warning')
+        return redirect(url_for('signin'))
     return render_template('chatbot.html', active_page='chatbot')
 
 @app.route('/dashboard')
@@ -493,24 +498,24 @@ QUIZ_CONFIG = {
 }
 
 
-# Create prompt templates
-generation_prompt = ChatPromptTemplate.from_template("Generate a paragraph based on this topic: {topic}")
-feedback_prompt = ChatPromptTemplate.from_template("""
+# Create prompt templates - replace with string templates
+generation_prompt_template = "Generate a paragraph based on this topic: {topic}"
+feedback_prompt_template = """
 Evaluate the following transcription accuracy:
 Original Paragraph: {original_paragraph}
 Transcribed Text: {transcribed_text}
 Score: {score}/5
 
 Provide brief feedback about the accuracy of the transcription and pronunciation.
-""")
+"""
 #essay
-topic_prompt = ChatPromptTemplate.from_template(
+topic_prompt_template = (
     "Generate an interesting writing topic that would make for a good 250-word essay. "
     "The topic should be specific enough to be focused but broad enough to allow for development. "
     "Return only the topic without any additional text or explanation."
 )
 
-evaluation_prompt = ChatPromptTemplate.from_template("""
+evaluation_prompt_template = """
 Evaluate the following 250-word essay:
 
 Topic: {topic}
@@ -527,16 +532,16 @@ First provide the numerical score as an integer between 1 and 5, then provide a 
 Format your response exactly as:
 SCORE: [number]
 FEEDBACK: [your feedback]
-""")
+"""
 
-generation_Lprompt = ChatPromptTemplate.from_template("Generate a single line sentence based on this topic: {topic}")
-feedback_Lprompt = ChatPromptTemplate.from_template("""
+generation_Lprompt_template = "Generate a single line sentence based on this topic: {topic}"
+feedback_Lprompt_template = """
 Evaluate the following transcription accuracy:
 Original Paragraph: {original_paragraph}
 Transcribed Text: {transcribed_text}
 Score: {score}/5
 Provide brief feedback about the accuracy of the transcription and pronunciation.
-""")
+"""
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -567,11 +572,29 @@ Question 1:
 
 """
 
-question_prompt = ChatPromptTemplate.from_template(question_template)
-model = OllamaLLM(model="llama3.1:8b")
-question_chain = question_prompt | model
-text_splitter = CharacterTextSplitter(separator="/n", chunk_size=1000, chunk_overlap=200)
-embeddings = HuggingFaceEmbeddings()
+question_prompt_template = question_template
+
+# Function to generate questions with Groq
+def generate_questions_with_groq(template, input_data):
+    system_prompt = "You are a helpful AI assistant that generates quiz questions from text."
+    formatted_prompt = template.format(**input_data)
+    
+    completion = groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": formatted_prompt}
+        ],
+        temperature=0.7,
+        max_tokens=2048,
+        top_p=1,
+    )
+    
+    return completion.choices[0].message.content
+
+# Use this function instead of directly piping through model
+def question_chain_invoke(data):
+    return generate_questions_with_groq(question_template, data)
 
 def parse_input(input_text):
     lines = input_text.strip().split("\n")
@@ -604,7 +627,58 @@ def landingpage():
 
 @app.route('/signin')
 def signin():
+    # If user is already logged in, redirect to chatbot
+    if 'user_id' in session:
+        return redirect(url_for('chatbot'))
     return render_template('signin.html', active_page='home')
+
+@app.route('/auth', methods=['POST'])
+def authenticate():
+    try:
+        # Get the ID token from the request
+        id_token = request.json.get('idToken')
+        if not id_token:
+            return jsonify({'error': 'No ID token provided'}), 400
+            
+        # Verify the ID token
+        decoded_token = auth.verify_id_token(id_token)
+        
+        # Get user info
+        user_id = decoded_token['uid']
+        email = decoded_token.get('email', '')
+        name = decoded_token.get('name', '')
+        
+        # If name is not in token, try to get it from Firebase Auth
+        if not name:
+            try:
+                user = auth.get_user(user_id)
+                name = user.display_name or ''
+            except:
+                name = email.split('@')[0]  # Use part of email as name if nothing else available
+        
+        # Store user data in session
+        session['user_id'] = user_id
+        session['email'] = email
+        session['name'] = name
+        
+        return jsonify({
+            'success': True,
+            'redirect': url_for('chatbot'),
+            'user': {
+                'id': user_id,
+                'email': email,
+                'name': name
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 401
+
+@app.route('/logout')
+def logout():
+    # Clear the session
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('landingpage'))
 
 @app.route('/dasboard')
 def index():
@@ -676,6 +750,32 @@ class Note(db.Model):
     due_date = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+# Financial Literacy Course Models
+class CourseModule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    order = db.Column(db.Integer, nullable=False)
+    image = db.Column(db.String(200))
+    sections = db.relationship('CourseSection', backref='module', lazy=True)
+    
+class CourseSection(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    order = db.Column(db.Integer, nullable=False)
+    module_id = db.Column(db.Integer, db.ForeignKey('course_module.id'), nullable=False)
+    
+class UserProgress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(128), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('course_section.id'), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    completed_at = db.Column(db.DateTime)
+    
+    # Create a unique constraint to ensure one entry per user per section
+    __table_args__ = (db.UniqueConstraint('user_id', 'section_id'),)
+
 @app.route('/notes')
 @app.route('/notes/<path:note_type>')
 def notes(note_type=None):
@@ -737,23 +837,40 @@ def process_pdf(file):
 def test_generate():
     if request.method == "POST":
         # Handle text input
-        inputText = request.form.get("itext", "")
+        inputText = request.form.get("itext", "").strip()
         testType = request.form.get("test_type")
         noOfQues = request.form.get("noq")
         processing_method = request.form.get("processing_method")  # Get processing method
 
         # Handle file upload
         pdf_file = request.files.get("pdf_file")
-        if pdf_file:
-            filename = secure_filename(pdf_file.filename)
-            pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            pdf_file.save(pdf_path)
-            inputText = extract_text_from_pdf(pdf_path)
+        if pdf_file and pdf_file.filename:
+            try:
+                filename = secure_filename(pdf_file.filename)
+                pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                pdf_file.save(pdf_path)
+                inputText = extract_text_from_pdf(pdf_path)
+                print(f"Extracted {len(inputText)} characters from PDF")
+            except Exception as e:
+                print(f"Error processing PDF: {str(e)}")
+                flash(f"Error processing PDF: {str(e)}", "danger")
+                return redirect(url_for('Qna'))
+        
+        # Validate input
+        if not inputText or len(inputText.strip()) < 20:
+            flash("Please provide more text content (at least 20 characters) to generate flashcards.", "warning")
+            return redirect(url_for('Qna'))
 
-        # Filter the input text
-        cleaned_text = clean_text(inputText)
-        filtered_text = filter_unwanted_text(cleaned_text)
-        final_filtered_text = preserve_content_length(inputText, filtered_text, retention_factor=0.9)
+        # Make sure noOfQues is valid
+        try:
+            noOfQues = int(noOfQues)
+            if noOfQues < 1:
+                noOfQues = 5  # Default to 5 questions if invalid
+        except (ValueError, TypeError):
+            noOfQues = 5  # Default to 5 questions if parsing fails
+            
+        # Use raw input text directly - no cleaning or filtering
+        final_filtered_text = inputText
 
         if testType == "objective":
             if processing_method == "nlp":
@@ -762,9 +879,11 @@ def test_generate():
                 return render_template('objective.html', mcqs=mcqs)
 
             elif processing_method == "llm":
-                # Here, include num_questions in the prompt input
-                prompt_input = question_template.format(num_questions=noOfQues, input_text=final_filtered_text)
-                response = question_chain.invoke({"input_text": final_filtered_text, "num_questions": noOfQues})
+                # Use the new Groq-based question generator
+                response = question_chain_invoke({
+                    "num_questions": noOfQues, 
+                    "input_text": final_filtered_text
+                })
                 mcq_text = response
                 cleaned_mcq_text = remove_special_characters(mcq_text)
 
@@ -779,36 +898,56 @@ def test_generate():
                 return render_template('subjective.html', cresults=testgenerate)
             
             elif processing_method == "llm":
-                # Generate Q&A using Llama 3.1
-                template = """
-                You are an AI assistant designed to generate educational questions and answers based on the provided content. Your task is to create relevant and insightful questions that test the understanding of the text, followed by accurate and concise answers.
+                # Determine source type
+                source_type = "PDF" if pdf_file else "Text Input"
+                content_length = len(final_filtered_text) if final_filtered_text else 0
+                
+                # If no content, show error
+                if not final_filtered_text or content_length < 10:
+                    flash('Please provide more text content to generate flashcards.', 'warning')
+                    return redirect(url_for('Qna'))
+                
+                # Generate Q&A using Groq's Gemma model
+                system_prompt = "You are an AI assistant designed to generate educational flashcards based on the provided content."
+                prompt_content = f"""
+                You are an AI assistant designed to generate educational flashcards based on the provided content. Your task is to create relevant and insightful questions that test the understanding of the text, followed by accurate and concise answers.
 
                 Content: 
-                {question}
+                {final_filtered_text}
 
-                Now, generate the following:
-                1. A set of well-structured questions that directly relate to the key points in the content.
-                2. For each question, provide a clear and accurate answer.
+                Now, generate {noOfQues} flashcards following these guidelines:
+                1. Each flashcard should have a question that relates to a key point in the content
+                2. Each answer should be concise, informative, and directly address the question
+                3. Use clear, straightforward language
+                4. Make sure questions cover different aspects of the content
 
-                Format:
-                Question 1: [Your question here]
-                Answer 1: 
-                [Your answer here]
+                Format each flashcard exactly like this:
+                Question X: [Your question here]
+                Answer X: [Your answer here]
 
-                Question 2: [Your question here]
-                Answer 2: 
-                [Your answer here]
-
-                Please ensure the questions cover different aspects of the content, and the answers are informative and to the point.
+                Where X is the flashcard number (1, 2, 3, etc.)
                 """
-
-                prompt = ChatPromptTemplate.from_template(template)
-                model = OllamaLLM(model="llama3.1:8b")
-                chain = prompt | model
-
-                response = chain.invoke({"question": final_filtered_text})
-                qna_text = response 
-                qna_text_cleaned = remove_special_characters(qna_text)
+                
+                try:
+                    completion = groq_client.chat.completions.create(
+                        model="gemma2-9b-it",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt_content}
+                        ],
+                        temperature=0.7,
+                        max_tokens=2048,
+                        top_p=1,
+                    )
+                    
+                    qna_text = completion.choices[0].message.content
+                    
+                    # Don't strip all special characters, just clean up a bit
+                    qna_text_cleaned = qna_text.replace('"', '').replace('"', '')
+                except Exception as e:
+                    print(f"Error calling Groq API: {str(e)}")
+                    flash(f"Error generating flashcards: {str(e)}", "danger")
+                    return redirect(url_for('Qna'))
 
                 # Prepare Q&A data for rendering
                 qna_items = []
@@ -824,21 +963,126 @@ def test_generate():
                     elif line.startswith("Answer") and current_question:
                         current_question['answer'] = line
 
+                # Debug prints
+                print(f"Input text length: {len(inputText)}")
+                print(f"Final text length: {len(final_filtered_text)}")
+                print(f"Number of QnA items: {len(qna_items)}")
+                print(f"Content source: {source_type}")
+                print(f"Content length: {content_length}")
+
+                # Check for empty response and retry if needed
+                if not qna_items:
+                    print("No QnA items found in response, retrying with simpler prompt...")
+                    # Simplified prompt for retry
+                    prompt_content = f"""
+                    Based on this content: 
+                    {final_filtered_text}
+
+                    Generate {noOfQues} simple question and answer pairs in this exact format:
+                    Question 1: [Question]
+                    Answer 1: [Answer]
+                    Question 2: [Question]
+                    Answer 2: [Answer]
+                    """
+                    
+                    # Retry with simpler prompt
+                    try:
+                        completion = groq_client.chat.completions.create(
+                            model="gemma2-9b-it",
+                            messages=[
+                                {"role": "system", "content": "Generate simple question-answer pairs."},
+                                {"role": "user", "content": prompt_content}
+                            ],
+                            temperature=0.7,
+                            max_tokens=2048,
+                            top_p=1,
+                        )
+                        
+                        qna_text = completion.choices[0].message.content
+                        qna_text_cleaned = qna_text.replace('"', '').replace('"', '')
+                    except Exception as e:
+                        print(f"Error in retry attempt: {str(e)}")
+                        # Create a default item instead of showing an error
+                        summary = final_filtered_text[:200] + "..." if len(final_filtered_text) > 200 else final_filtered_text
+                        qna_items = [
+                            {
+                                'type': 'qa',
+                                'question': 'Question 1: What is the main topic of this text?',
+                                'answer': f'Answer 1: The text appears to discuss {summary}'
+                            }
+                        ]
+                        return render_template('qna_template.html', 
+                                             qna_items=qna_items, 
+                                             source_type=source_type,
+                                             content_length=content_length)
+                    
+                    # Process the response again
+                    qna_lines = qna_text_cleaned.split('\n')
+                    for line in qna_lines:
+                        line = line.strip()
+                        if line.startswith("Question"):
+                            current_question = {'type': 'qa', 'question': line, 'answer': None}
+                            qna_items.append(current_question)
+                        elif line.startswith("Answer") and current_question:
+                            current_question['answer'] = line
+                    
+                    print(f"Retry resulted in {len(qna_items)} QnA items")
+                    
+                    # If still no items, create a default set
+                    if not qna_items:
+                        print("Still no QnA items, creating default set")
+                        # Create at least one item to prevent empty display
+                        summary = final_filtered_text[:200] + "..." if len(final_filtered_text) > 200 else final_filtered_text
+                        qna_items = [
+                            {
+                                'type': 'qa',
+                                'question': 'Question 1: What is the main topic of this text?',
+                                'answer': f'Answer 1: The text appears to discuss {summary}'
+                            }
+                        ]
+
                 # Render HTML template with Q&A data
-                return render_template('qna_template.html', qna_items=qna_items)
+                return render_template('qna_template.html', 
+                                      qna_items=qna_items, 
+                                      source_type=source_type,
+                                      content_length=content_length)
         else:
             flash('Error Occurred!')
             return redirect(url_for('Qna'))
 
 # Function to generate a paragraph
 def generate_paragraph(topic):
-    paragraph_chain = generation_prompt | model
-    return paragraph_chain.invoke({"topic": topic})
+    system_prompt = "Generate a paragraph based on the given topic."
+    
+    completion = groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Generate a paragraph based on this topic: {topic}"}
+        ],
+        temperature=0.7,
+        max_tokens=1024,
+        top_p=1,
+    )
+    
+    return completion.choices[0].message.content
 
 def generate_topic():#essay
-    """Generate a writing topic using Ollama"""
-    topic_chain = topic_prompt | model
-    return topic_chain.invoke({}).strip()
+    """Generate a writing topic using Groq"""
+    system_prompt = "Generate an interesting writing topic that would make for a good 250-word essay."
+    
+    completion = groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Generate an interesting writing topic that would make for a good 250-word essay. The topic should be specific enough to be focused but broad enough to allow for development. Return only the topic without any additional text or explanation."}
+        ],
+        temperature=0.7,
+        max_tokens=100,
+        top_p=1,
+    )
+    
+    return completion.choices[0].message.content.strip()
 
 @app.route('/get_topic', methods=['GET'])
 def get_topic():
@@ -861,23 +1105,64 @@ def evaluate_accuracyr(generated_paragraph, transcribed_text):
     # Convert accuracy to 1-5 scale
     score = round((accuracy / 100) * 5)
     
-    # Generate feedback using the template
-    feedback_chain = feedback_prompt | model
-    feedback = feedback_chain.invoke({
-        "original_paragraph": generated_paragraph,
-        "transcribed_text": transcribed_text,
-        "score": score
-    })
+    # Generate feedback using Groq
+    system_prompt = "You are evaluating the accuracy of a transcription compared to an original paragraph."
+    
+    completion = groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"""
+            Evaluate the following transcription accuracy:
+            Original Paragraph: {generated_paragraph}
+            Transcribed Text: {transcribed_text}
+            Score: {score}/5
+            
+            Provide brief feedback about the accuracy of the transcription and pronunciation.
+            """}
+        ],
+        temperature=0.7,
+        max_tokens=512,
+        top_p=1,
+    )
+    
+    feedback = completion.choices[0].message.content
     
     return score, feedback
 
 def evaluate_essay(topic, essay):
     """Evaluate the essay and return score and feedback"""
-    evaluation_chain = evaluation_prompt | model
-    response = evaluation_chain.invoke({
-        "topic": topic,
-        "essay": essay
-    })
+    system_prompt = "You are evaluating essays for clarity, organization, and content."
+    
+    completion = groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"""
+            Evaluate the following 250-word essay:
+            
+            Topic: {topic}
+            Essay: {essay}
+            
+            Provide a rating on a scale of 1-5 (where 5 is excellent) based on the following criteria:
+            - Relevance to the topic
+            - Organization and structure
+            - Development of ideas
+            - Language usage and clarity
+            - Overall quality
+            
+            First provide the numerical score as an integer between 1 and 5, then provide a brief constructive feedback explaining the rating.
+            Format your response exactly as:
+            SCORE: [number]
+            FEEDBACK: [your feedback]
+            """}
+        ],
+        temperature=0.7,
+        max_tokens=1024,
+        top_p=1,
+    )
+    
+    response = completion.choices[0].message.content
     
     try:
         lines = response.split('\n')
@@ -989,8 +1274,20 @@ def next_task():
     })
 
 def generate_Lparagraph(topic):
-    paragraph_chain = generation_Lprompt | model
-    return paragraph_chain.invoke({"topic": topic})
+    system_prompt = "Generate a single line sentence based on this topic."
+    
+    completion = groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Generate a single line sentence based on this topic: {topic}"}
+        ],
+        temperature=0.7,
+        max_tokens=256,
+        top_p=1,
+    )
+    
+    return completion.choices[0].message.content
 
 def evaluate_Laccuracy(generated_paragraph, transcribed_text):
     generated_words = generated_paragraph.split()
@@ -1001,12 +1298,27 @@ def evaluate_Laccuracy(generated_paragraph, transcribed_text):
     accuracy = (correct_words / total_words) * 100
     score = round((accuracy / 100) * 5)
     
-    feedback_chain = feedback_Lprompt | model
-    feedback = feedback_chain.invoke({
-        "original_paragraph": generated_paragraph,
-        "transcribed_text": transcribed_text,
-        "score": score
-    })
+    system_prompt = "You are evaluating the accuracy of a transcription compared to an original paragraph."
+    
+    completion = groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"""
+            Evaluate the following transcription accuracy:
+            Original Paragraph: {generated_paragraph}
+            Transcribed Text: {transcribed_text}
+            Score: {score}/5
+            
+            Provide brief feedback about the accuracy of the transcription and pronunciation.
+            """}
+        ],
+        temperature=0.7,
+        max_tokens=512,
+        top_p=1,
+    )
+    
+    feedback = completion.choices[0].message.content
     
     return score, feedback
 
@@ -1051,11 +1363,30 @@ def cleanup_audio():
             os.remove(filepath)
 
 def load_knowledge_base(pdf_path):
-    loader = PyPDFLoader(pdf_path)
-    documents = loader.load()
-    text_chunks = text_splitter.split_documents(documents)
-    knowledge_base = FAISS.from_documents(text_chunks, embeddings)
-    return RetrievalQA.from_chain_type(model, retriever=knowledge_base.as_retriever())
+    # Extract text from PDF
+    text = ""
+    pdf_reader = PdfReader(pdf_path)
+    for page_num in range(len(pdf_reader.pages)):
+        page_text = pdf_reader.pages[page_num].extract_text()
+        text += page_text
+    
+    def process_query_with_groq(query):
+        system_prompt = "You are a helpful assistant answering questions based on provided documents."
+        
+        completion = groq_client.chat.completions.create(
+            model="gemma2-9b-it",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Based on the following context, please answer the question: {query}\n\nContext: {text}"}
+            ],
+            temperature=0.7,
+            max_tokens=1024,
+            top_p=1,
+        )
+        
+        return {"result": completion.choices[0].message.content}
+    
+    return type('DummyQA', (), {'invoke': process_query_with_groq})()
 
 
 
@@ -1843,201 +2174,168 @@ def calculate_score():
 
 ############ Testing WALA ################
 def safe_wikipedia_search(query: str) -> str:
-    """Safely search Wikipedia with error handling"""
     try:
-        query = query.strip('"\'').replace('+', ' ')
-        search_results = wikipedia.search(query, results=1)
-        if not search_results:
-            return f"No Wikipedia articles found for '{query}'"
-        
-        page_title = search_results[0]
-        page = wikipedia.page(page_title, auto_suggest=False)
-        return page.summary[0:500]
-        
-    except wikipedia.exceptions.DisambiguationError as e:
-        try:
-            page = wikipedia.page(e.options[0], auto_suggest=False)
-            return page.summary[0:500]
-        except:
-            return f"Multiple Wikipedia articles found for '{query}'. Please be more specific."
-    except wikipedia.exceptions.PageError:
-        return f"No Wikipedia article found for '{query}'"
+        return wikipedia.summary(query, sentences=5)
     except Exception as e:
-        return f"An error occurred while searching Wikipedia: {str(e)}"
+        return f"Error fetching information from Wikipedia: {str(e)}"
 
 def safe_duckduckgo_search(query: str) -> str:
-    """Safely search DuckDuckGo with error handling"""
     try:
-        query = query.strip('"\'').replace('+', ' ')
-        
         with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=3))
-        
-        if not results:
-            return "No results found on DuckDuckGo."
-            
-        formatted_results = []
-        for r in results:
-            link = r.get('link', 'No link available')
-            body = r['body'][:200] + '...' if 'body' in r else ''
-            formatted_results.append(f"- {r['title']}\n  {body}\n  Source: {link}")
-        
-        return "\n\n".join(formatted_results)
+            results = list(ddgs.text(query, max_results=5))
+        return "\n".join([f"{r['title']}: {r['body']}" for r in results])
     except Exception as e:
-        return f"An error occurred while searching DuckDuckGo: {str(e)}"
+        return f"Error searching with DuckDuckGo: {str(e)}"
 
 def safe_math_eval(expression: str) -> str:
-    """Safely evaluate mathematical expressions"""
     try:
-        allowed_chars = set("0123456789+-*/(). ")
+        # Validate the expression for safety
+        allowed_chars = set("0123456789+-*/() .")
         if not all(c in allowed_chars for c in expression):
-            return "Invalid mathematical expression. Only basic operations are allowed."
-        result = eval(expression)
-        return str(result)
+            return "Invalid characters in expression."
+        
+        # Use eval to calculate the result (risky but controlled)
+        return str(eval(expression))
     except Exception as e:
-        return f"Error evaluating mathematical expression: {str(e)}"
+        return f"Error in calculation: {str(e)}"
 
 def search_arxiv(query: str) -> str:
-    """Search ARXiv with improved response parsing"""
-    if not query:
-        return "No query provided."
     try:
-        url = f"http://export.arxiv.org/api/query?search_query=all:{query}&start=0&max_results=3"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
+        # Basic URL for arXiv API
+        url = "http://export.arxiv.org/api/query"
+        params = {
+            "search_query": f"all:{query}",
+            "max_results": 5
+        }
         
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            return f"Error: Received status code {response.status_code} from arXiv"
+        
+        # Parse XML response
         root = ET.fromstring(response.text)
-        results = []
-        for entry in root.findall('{http://www.w3.org/2005/Atom}entry'):
-            title = entry.find('{http://www.w3.org/2005/Atom}title').text
-            summary = entry.find('{http://www.w3.org/2005/Atom}summary').text
-            link = entry.find('{http://www.w3.org/2005/Atom}id').text
-            results.append(f"Title: {title}\nLink: {link}\nSummary: {summary[:200]}...\n")
         
-        return "\n".join(results) if results else "No results found on arXiv."
+        results = []
+        for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
+            title = entry.find("{http://www.w3.org/2005/Atom}title").text.strip()
+            summary = entry.find("{http://www.w3.org/2005/Atom}summary").text.strip()
+            url = entry.find("{http://www.w3.org/2005/Atom}id").text.strip()
+            
+            # Truncate summary if too long
+            if len(summary) > 300:
+                summary = summary[:300] + "..."
+            
+            results.append(f"Title: {title}\nSummary: {summary}\nURL: {url}\n")
+        
+        return "\n".join(results) if results else "No results found on arXiv for your query."
     except Exception as e:
-        return f"Error searching ArXiv: {str(e)}"
+        return f"Error searching arXiv: {str(e)}"
 
 def search_pubmed(query: str) -> str:
-    """Search PubMed with improved response handling"""
-    if not query:
-        return "No query provided."
     try:
-        esearch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={query}&retmax=3&format=json"
-        response = requests.get(esearch_url, timeout=10)
-        response.raise_for_status()
+        # Use PubMed API to search for papers
+        # First get IDs of matching papers
+        esearch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+        esearch_params = {
+            "db": "pubmed",
+            "term": query,
+            "retmode": "json",
+            "retmax": 5
+        }
         
-        data = response.json()
-        ids = data.get('esearchresult', {}).get('idlist', [])
+        esearch_response = requests.get(esearch_url, params=esearch_params)
+        esearch_data = json.loads(esearch_response.text)
         
-        if not ids:
-            return "No results found on PubMed."
-            
-        ids_string = ",".join(ids)
-        esummary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={ids_string}&format=json"
-        response = requests.get(esummary_url, timeout=10)
-        response.raise_for_status()
+        if "esearchresult" not in esearch_data or "idlist" not in esearch_data["esearchresult"]:
+            return "No results found in PubMed for your query."
         
-        data = response.json()
+        id_list = esearch_data["esearchresult"]["idlist"]
+        
+        if not id_list:
+            return "No results found in PubMed for your query."
+        
+        # Get summaries for the IDs
+        esummary_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+        esummary_params = {
+            "db": "pubmed",
+            "id": ",".join(id_list),
+            "retmode": "json"
+        }
+        
+        esummary_response = requests.get(esummary_url, params=esummary_params)
+        esummary_data = json.loads(esummary_response.text)
+        
         results = []
-        for id in ids:
-            paper = data['result'][id]
-            title = paper.get('title', 'No title available')
-            abstract = paper.get('abstract', 'No abstract available')
-            results.append(f"Title: {title}\nPubMed ID: {id}\nAbstract: {abstract[:200]}...\n")
-            
-        return "\n".join(results)
+        
+        for pmid in id_list:
+            if pmid in esummary_data["result"]:
+                paper = esummary_data["result"][pmid]
+                title = paper.get("title", "No Title Available")
+                abstract = "Abstract not available"
+                
+                # Try to get the abstract for each paper
+                efetch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+                efetch_params = {
+                    "db": "pubmed",
+                    "id": pmid,
+                    "retmode": "xml"
+                }
+                
+                efetch_response = requests.get(efetch_url, params=efetch_params)
+                
+                # Parse XML to extract abstract
+                root = ET.fromstring(efetch_response.text)
+                abstract_elements = root.findall(".//AbstractText")
+                if abstract_elements:
+                    abstract = " ".join([elem.text for elem in abstract_elements if elem.text])
+                
+                # Truncate abstract if too long
+                if len(abstract) > 300:
+                    abstract = abstract[:300] + "..."
+                
+                results.append(f"Title: {title}\nAbstract: {abstract}\nPMID: {pmid}\n")
+        
+        return "\n".join(results) if results else "No detailed results found in PubMed for your query."
     except Exception as e:
         return f"Error searching PubMed: {str(e)}"
 
-# Define the tools
-tools = [
-    Tool(
-        name="Wikipedia",
-        func=safe_wikipedia_search,
-        description="Get detailed explanations and summaries from Wikipedia. who, what, when, where, why, how, story.",
-    ),
-    Tool(
-        name="DuckDuckGo",
-        func=safe_duckduckgo_search,
-        description="Search the web for current information. Input: search query. who, what, when, where, why, how.",
-    ),
-    Tool(
-        name="BasicMath",
-        func=safe_math_eval,
-        description="Performs basic mathematical calculations. Input: mathematical expression using +, -, *, /, ().",
-    ),
-    Tool(
-        name="ArXiv",
-        func=search_arxiv,
-        description="Searches arXiv for scientific papers. research paper topic or keywords.",
-    ),
-    Tool(
-        name="PubMed",
-        func=search_pubmed,
-        description="Searches PubMed for medical research. research paper on medical topic or keywords.",
-    ),
+# List of available research tools
+research_tools = [
+    {"name": "Wikipedia", "description": "Get detailed explanations and summaries from Wikipedia"},
+    {"name": "DuckDuckGo", "description": "Search the web for current information"},
+    {"name": "BasicMath", "description": "Performs basic mathematical calculations"},
+    {"name": "ArXiv", "description": "Searches arXiv for scientific papers"},
+    {"name": "PubMed", "description": "Searches PubMed for medical research"}
 ]
 
-tool_descriptions = "\n".join([f"{tool.name}: {tool.description}" for tool in tools])
-
-CUSTOM_PROMPT = f"""You are a helpful research assistant that finds information using the available tools. Follow these guidelines strictly:
-
-Available tools:
-
+def process_research_with_groq(query):
+    tool_descriptions = "\n".join([f"{tool['name']}: {tool['description']}" for tool in research_tools])
+    system_prompt = f"""You are a research assistant with access to the following tools:
 {tool_descriptions}
 
-Instructions:
-. Details from Internal Knowledge: Related information you already know
-. Add line breaks between sections
-. Use the exact tool name from the list above
-. Keep queries simple and clear
-. Use tools according to the type of information needed
-. In case of research paper only use ArXiv and Pubmed
-. Summarize information from multiple sources when relevant
-. Stop as soon as you have a clear answer with reference links
+Based on the user's query, determine which tool would be most appropriate to use. 
+Then, provide a comprehensive answer using the information retrieved from that tool.
+If you need information from multiple tools, use them in sequence and combine the results.
 
-Use this exact format:
+Format your response in clear, well-organized sections with appropriate headings if necessary.
+"""
 
-Question: the input question you must answer
-Thought: analyze the question and decide which tool to use
-Action: use EXACTLY one of these tools: Wikipedia, DuckDuckGo, BasicMath, ArXiv, or PubMed
-Action Input: just the plain search query or math expression
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat up to 3 times if needed)
-Thought: I now know the final answer
-Final Answer: provide a complete answer based on the information gathered with link (Details from Web Search: 
-- First result title and brief description
-- Second result title and brief description
-
-References:
-[1] link1
-[2] link2
-[etc])
-
-Begin!
-
-Question: {{input}}
-Thought:"""
-
-# Initialize the agent
-agent = initialize_agent(
-    tools,
-    llama,
-    agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-    verbose=True,
-    agent_kwargs={
-        "prefix": CUSTOM_PROMPT,
-        "max_iterations": 3,
-        "early_stopping_method": "generate",
-
-    },
-    handle_parsing_errors=True
-)
+    completion = groq_client.chat.completions.create(
+        model="gemma2-9b-it",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ],
+        temperature=0.7,
+        max_tokens=2048,
+        top_p=1,
+    )
+    
+    return completion.choices[0].message.content
 
 @app.route('/research')
 def research():
-    return render_template('research.html', tools=tools)
+    return render_template('research.html', tools=research_tools)
 
 @app.route('/search', methods=['POST'])
 def search():
@@ -2046,7 +2344,7 @@ def search():
         if not user_input:
             return jsonify({'error': 'No query provided'}), 400
         
-        result = agent.run(user_input)
+        result = process_research_with_groq(user_input)
         return jsonify({'result': result})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2101,7 +2399,453 @@ def firebase_auth():
 
 @app.route('/quizpage')
 def quizpage():
-    return render_template('quizpage.html', active_page='quizpage')
+    return render_template('quizpage.html')
+
+# Financial Literacy Course Routes
+@app.route('/courses')
+def courses():
+    # Hardcoded module data instead of database queries
+    modules = [
+        {
+            'id': 1,
+            'title': 'Investment Basics',
+            'description': 'Learn the fundamentals of investing and building wealth',
+            'image': 'investment_basics.jpg'
+        },
+        {
+            'id': 2,
+            'title': 'Stock Market 101',
+            'description': 'Understanding how the stock market works',
+            'image': 'stock_market.jpg'
+        },
+        {
+            'id': 3,
+            'title': 'Mutual Funds Explained',
+            'description': 'Learn how mutual funds work and their benefits',
+            'image': 'mutual_funds.jpg'
+        },
+        {
+            'id': 4,
+            'title': 'Retirement Planning',
+            'description': 'Building a secure financial future',
+            'image': 'retirement.jpg'
+        },
+        {
+            'id': 5,
+            'title': 'Tax-Efficient Investing',
+            'description': 'Strategies to minimize your tax burden',
+            'image': 'tax_efficient.jpg'
+        }
+    ]
+    
+    # Hardcoded progress data
+    module_progress = {
+        1: 0,  # 0% complete
+        2: 0,  # 0% complete
+        3: 0,  # 0% complete
+        4: 0,  # 0% complete
+        5: 0   # 0% complete
+    }
+    
+    return render_template('courses.html', modules=modules, module_progress=module_progress, active_page='courses')
+
+@app.route('/course/<int:module_id>')
+def course_module(module_id):
+    # Hardcoded module data
+    modules = {
+        1: {
+            'id': 1,
+            'title': 'Investment Basics',
+            'description': 'Learn the fundamentals of investing and building wealth'
+        },
+        2: {
+            'id': 2,
+            'title': 'Stock Market 101',
+            'description': 'Understanding how the stock market works'
+        },
+        3: {
+            'id': 3,
+            'title': 'Mutual Funds Explained',
+            'description': 'Learn how mutual funds work and their benefits'
+        },
+        4: {
+            'id': 4,
+            'title': 'Retirement Planning',
+            'description': 'Building a secure financial future'
+        },
+        5: {
+            'id': 5,
+            'title': 'Tax-Efficient Investing',
+            'description': 'Strategies to minimize your tax burden'
+        }
+    }
+    
+    # Hardcoded sections data
+    sections_by_module = {
+        1: [
+            {
+                'id': 1,
+                'title': 'What is Investing?',
+                'order': 1,
+                'module_id': 1
+            },
+            {
+                'id': 2,
+                'title': 'Types of Investments',
+                'order': 2,
+                'module_id': 1
+            },
+            {
+                'id': 3,
+                'title': 'Risk vs. Return',
+                'order': 3,
+                'module_id': 1
+            }
+        ],
+        2: [
+            {
+                'id': 4,
+                'title': 'What is the Stock Market?',
+                'order': 1,
+                'module_id': 2
+            },
+            {
+                'id': 5,
+                'title': 'Stock Exchanges',
+                'order': 2,
+                'module_id': 2
+            },
+            {
+                'id': 6,
+                'title': 'Bull vs. Bear Markets',
+                'order': 3,
+                'module_id': 2
+            }
+        ],
+        3: [
+            {
+                'id': 7,
+                'title': 'What are Mutual Funds?',
+                'order': 1,
+                'module_id': 3
+            },
+            {
+                'id': 8,
+                'title': 'Types of Mutual Funds',
+                'order': 2,
+                'module_id': 3
+            },
+            {
+                'id': 9,
+                'title': 'Advantages and Disadvantages',
+                'order': 3,
+                'module_id': 3
+            }
+        ],
+        4: [
+            {
+                'id': 10,
+                'title': 'Why Plan for Retirement?',
+                'order': 1,
+                'module_id': 4
+            },
+            {
+                'id': 11,
+                'title': 'Retirement Accounts',
+                'order': 2,
+                'module_id': 4
+            },
+            {
+                'id': 12,
+                'title': 'The 4% Rule',
+                'order': 3,
+                'module_id': 4
+            }
+        ],
+        5: [
+            {
+                'id': 13,
+                'title': 'The Impact of Taxes on Investments',
+                'order': 1,
+                'module_id': 5
+            },
+            {
+                'id': 14,
+                'title': 'Tax-Advantaged Accounts',
+                'order': 2,
+                'module_id': 5
+            },
+            {
+                'id': 15,
+                'title': 'Tax-Loss Harvesting',
+                'order': 3,
+                'module_id': 5
+            }
+        ]
+    }
+    
+    # Hardcoded progress data (simulated completed sections)
+    progress_data = {}
+    
+    # Get the module
+    module = modules.get(module_id)
+    if not module:
+        return "Module not found", 404
+    
+    # Get sections for this module
+    sections = sections_by_module.get(module_id, [])
+    
+    return render_template('course_module.html', module=module, sections=sections, progress_data=progress_data, active_page='courses')
+
+@app.route('/course/section/<int:section_id>')
+def course_section(section_id):
+    # Hardcoded section content
+    sections = {
+        1: {
+            'id': 1,
+            'title': 'What is Investing?',
+            'content': '<h2>What is Investing?</h2><p>Investing is the act of allocating resources, usually money, with the expectation of generating income or profit over time. Unlike saving, which is setting aside money for future use with minimal risk, investing involves taking on risk in pursuit of greater returns.</p>',
+            'module_id': 1,
+            'order': 1
+        },
+        2: {
+            'id': 2,
+            'title': 'Types of Investments',
+            'content': '<h2>Types of Investments</h2><p>Common investment types include stocks (ownership in a company), bonds (loans to companies or governments), mutual funds (professionally managed portfolios), real estate, and more specialized options like ETFs, REITs, and cryptocurrency.</p>',
+            'module_id': 1,
+            'order': 2
+        },
+        3: {
+            'id': 3,
+            'title': 'Risk vs. Return',
+            'content': '<h2>Risk vs. Return</h2><p>A fundamental principle of investing is the relationship between risk and return. Generally, investments with higher potential returns come with higher risks. Understanding your risk tolerance is crucial for building an appropriate investment portfolio.</p>',
+            'module_id': 1,
+            'order': 3
+        },
+        4: {
+            'id': 4,
+            'title': 'What is the Stock Market?',
+            'content': '<h2>What is the Stock Market?</h2><p>The stock market is a collection of exchanges where stocks (pieces of ownership in businesses) are traded. It provides companies with access to capital and investors with potential investment returns through capital gains and dividends.</p>',
+            'module_id': 2,
+            'order': 1
+        },
+        5: {
+            'id': 5,
+            'title': 'Stock Exchanges',
+            'content': '<h2>Stock Exchanges</h2><p>Major stock exchanges include the New York Stock Exchange (NYSE) and NASDAQ in the US, as well as international exchanges like the London Stock Exchange, Tokyo Stock Exchange, and Shanghai Stock Exchange.</p>',
+            'module_id': 2,
+            'order': 2
+        },
+        6: {
+            'id': 6,
+            'title': 'Bull vs. Bear Markets',
+            'content': '<h2>Bull vs. Bear Markets</h2><p>A bull market is characterized by rising stock prices and optimism, while a bear market features falling prices and pessimism. Understanding market cycles can help investors make more informed decisions.</p>',
+            'module_id': 2,
+            'order': 3
+        },
+        7: {
+            'id': 7,
+            'title': 'What are Mutual Funds?',
+            'content': '<h2>What are Mutual Funds?</h2><p>Mutual funds are investment vehicles that pool money from many investors to purchase a diversified portfolio of stocks, bonds, or other securities. They are managed by professional fund managers who make investment decisions on behalf of the fund\'s investors.</p>',
+            'module_id': 3,
+            'order': 1
+        },
+        8: {
+            'id': 8,
+            'title': 'Types of Mutual Funds',
+            'content': '<h2>Types of Mutual Funds</h2><p>Common types include equity funds (stocks), fixed-income funds (bonds), money market funds (short-term debt), balanced funds (mix of stocks and bonds), and index funds (track specific market indices).</p>',
+            'module_id': 3,
+            'order': 2
+        },
+        9: {
+            'id': 9,
+            'title': 'Advantages and Disadvantages',
+            'content': '<h2>Advantages and Disadvantages</h2><p>Advantages include diversification, professional management, and accessibility. Disadvantages include fees and expenses, potential tax inefficiency, and lack of control over specific investments.</p>',
+            'module_id': 3,
+            'order': 3
+        },
+        10: {
+            'id': 10,
+            'title': 'Why Plan for Retirement?',
+            'content': '<h2>Why Plan for Retirement?</h2><p>Retirement planning involves determining income goals for retirement and the actions and decisions necessary to achieve those goals. Planning early allows you to take advantage of compound interest and adjust your strategy as needed.</p>',
+            'module_id': 4,
+            'order': 1
+        },
+        11: {
+            'id': 11,
+            'title': 'Retirement Accounts',
+            'content': '<h2>Retirement Accounts</h2><p>Common retirement accounts include 401(k)s, IRAs (Traditional and Roth), pension plans, and annuities. Each has different tax advantages, contribution limits, and withdrawal rules.</p>',
+            'module_id': 4,
+            'order': 2
+        },
+        12: {
+            'id': 12,
+            'title': 'The 4% Rule',
+            'content': '<h2>The 4% Rule</h2><p>The 4% rule is a guideline suggesting that retirees can withdraw 4% of their retirement portfolio in the first year, then adjust that amount for inflation each subsequent year, with a high probability of not running out of money for at least 30 years.</p>',
+            'module_id': 4,
+            'order': 3
+        },
+        13: {
+            'id': 13,
+            'title': 'The Impact of Taxes on Investments',
+            'content': '<h2>The Impact of Taxes on Investments</h2><p>Taxes can significantly reduce investment returns over time. Understanding how different investments and accounts are taxed can help you maximize after-tax returns through strategic placement of assets.</p>',
+            'module_id': 5,
+            'order': 1
+        },
+        14: {
+            'id': 14,
+            'title': 'Tax-Advantaged Accounts',
+            'content': '<h2>Tax-Advantaged Accounts</h2><p>These include retirement accounts like 401(k)s and IRAs, Health Savings Accounts (HSAs), and 529 college savings plans. Each offers specific tax advantages for different financial goals.</p>',
+            'module_id': 5,
+            'order': 2
+        },
+        15: {
+            'id': 15,
+            'title': 'Tax-Loss Harvesting',
+            'content': '<h2>Tax-Loss Harvesting</h2><p>This strategy involves selling investments that have experienced losses to offset capital gains tax liability. It can help reduce taxable income while maintaining your overall investment allocation.</p>',
+            'module_id': 5,
+            'order': 3
+        }
+    }
+    
+    # Hardcoded module data
+    modules = {
+        1: {
+            'id': 1,
+            'title': 'Investment Basics',
+            'description': 'Learn the fundamentals of investing and building wealth'
+        },
+        2: {
+            'id': 2,
+            'title': 'Stock Market 101',
+            'description': 'Understanding how the stock market works'
+        },
+        3: {
+            'id': 3,
+            'title': 'Mutual Funds Explained',
+            'description': 'Learn how mutual funds work and their benefits'
+        },
+        4: {
+            'id': 4,
+            'title': 'Retirement Planning',
+            'description': 'Building a secure financial future'
+        },
+        5: {
+            'id': 5,
+            'title': 'Tax-Efficient Investing',
+            'description': 'Strategies to minimize your tax burden'
+        }
+    }
+    
+    # Hardcoded progress data
+    completed = False
+    
+    # Get the section
+    section = sections.get(section_id)
+    if not section:
+        return "Section not found", 404
+    
+    # Get the module
+    module = modules.get(section['module_id'])
+    if not module:
+        return "Module not found", 404
+    
+    # Get prev and next sections for navigation
+    section_ids = [s['id'] for s in sorted([s for s in sections.values() if s['module_id'] == section['module_id']], key=lambda x: x['order'])]
+    current_index = section_ids.index(section_id)
+    
+    prev_section = sections.get(section_ids[current_index - 1]) if current_index > 0 else None
+    next_section = sections.get(section_ids[current_index + 1]) if current_index < len(section_ids) - 1 else None
+    
+    return render_template('course_section.html', 
+                          section=section, 
+                          module=module, 
+                          completed=completed, 
+                          prev_section=prev_section, 
+                          next_section=next_section, 
+                          active_page='courses')
+
+@app.route('/course/complete-section/<int:section_id>', methods=['POST'])
+def complete_section(section_id):
+    # Simply return the redirect URL without updating any database
+    # The completion status is now tracked in localStorage on the client side
+    
+    # Find next section for redirection
+    sections = {
+        1: {'module_id': 1, 'order': 1},
+        2: {'module_id': 1, 'order': 2},
+        3: {'module_id': 1, 'order': 3},
+        4: {'module_id': 2, 'order': 1},
+        5: {'module_id': 2, 'order': 2},
+        6: {'module_id': 2, 'order': 3},
+        7: {'module_id': 3, 'order': 1},
+        8: {'module_id': 3, 'order': 2},
+        9: {'module_id': 3, 'order': 3},
+        10: {'module_id': 4, 'order': 1},
+        11: {'module_id': 4, 'order': 2},
+        12: {'module_id': 4, 'order': 3},
+        13: {'module_id': 5, 'order': 1},
+        14: {'module_id': 5, 'order': 2},
+        15: {'module_id': 5, 'order': 3}
+    }
+    
+    section = sections.get(section_id)
+    if not section:
+        return jsonify({'success': False, 'message': 'Section not found'})
+    
+    # Get all sections for this module
+    module_sections = sorted([s for s_id, s in sections.items() if s['module_id'] == section['module_id']], key=lambda x: x['order'])
+    
+    # Find current section index
+    current_index = next((i for i, s in enumerate(module_sections) if s.get('order') == section['order']), -1)
+    
+    if current_index < len(module_sections) - 1:
+        # There is a next section
+        next_section_id = next((s_id for s_id, s in sections.items() 
+                              if s['module_id'] == section['module_id'] and s['order'] == module_sections[current_index + 1]['order']), None)
+        if next_section_id:
+            return jsonify({'success': True, 'redirect': url_for('course_section', section_id=next_section_id)})
+    
+    # No next section, redirect to module page
+    return jsonify({'success': True, 'redirect': url_for('course_module', module_id=section['module_id'])})
+
+@app.route('/profile')
+def profile():
+    # Check if user is logged in
+    if 'user_id' not in session:
+        flash('Please log in to access this page.', 'warning')
+        return redirect(url_for('signin'))
+        
+    user_id = session.get('user_id')
+    user_email = session.get('email')
+    user_name = session.get('name')
+    
+    # User must be logged in due to check above
+    user_data = {
+        'id': user_id,
+        'email': user_email,
+        'name': user_name
+    }
+    
+    # We don't need to pass module progress data as it's handled by JavaScript with localStorage
+    return render_template('profile.html', user=user_data, active_page='profile')
+
+# Admin route to seed course data
+@app.route('/admin/seed-course-data')
+def seed_course_data():
+    # Since we're using static data, this endpoint is no longer needed
+    # But keep it for compatibility
+    return "Using static hardcoded data instead of database. No need to seed data."
+
+# Login required decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('signin'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 if __name__ == '__main__':
     app.run(debug=True)

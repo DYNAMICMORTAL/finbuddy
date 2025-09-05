@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1049436840406",
+    "project_id": "finbuddy-141ea",
+    "storage_bucket": "finbuddy-141ea.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1049436840406:android:7d43fc56cc9fe176bd4477",
+        "android_client_info": {
+          "package_name": "com.finbuddy"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1049436840406-sk8crkm23a1bqmikt10lluh0hbtu9dog.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCintv2FFs28ElzvS6-wNv258XX4-tJfEc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1049436840406-sk8crkm23a1bqmikt10lluh0hbtu9dog.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
