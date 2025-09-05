@@ -80,6 +80,16 @@
                     </a>
                 </li>
 
+                <!-- Update Simulator nav link to hub -->
+                <li class="nav-item {% if active_page == 'simulator' %}active{% endif %}">
+                    <b></b>
+                    <b></b>
+                    <a href="{{ url_for('simulator') }}">
+                        <i class="fa fa-chart-line nav-icon"></i>
+                        <span class="nav-text">Simulator</span>
+                    </a>
+                </li>
+
                 <li class="nav-item {% if active_page == 'chatbot' %}active{% endif %}">
                     <b></b>
                     <b></b>
@@ -154,7 +164,8 @@
                 risk_desc: "Short questionnaire to understand your risk persona — Conservative, Moderate, or Aggressive.",
                 badges_title: "Progress & Badges",
                 badges_desc: "Complete modules and quizzes to earn badges and build your literacy profile.",
-                calendar_title: "Calendar"
+                calendar_title: "Calendar",
+                cta_sim: "Try Simulator"
             },
             hi: {
                 hero_title: "फिनबडी में आपका स्वागत है — सीखें, सिमुलेट करें, सुरक्षित रहें।",
@@ -174,7 +185,8 @@
                 risk_desc: "छोटा प्रश्नावली — आपका जोखिम प्रोफ़ाइल: कंजरवेटिव, मॉडरेट या एग्रेसिव।",
                 badges_title: "प्रगति और बैज",
                 badges_desc: "मॉड्यूल और क्विज़ पूरे करें, बैज अर्जित करें और अपनी साक्षरता प्रोफ़ाइल बनाएं।",
-                calendar_title: "कैलेंडर"
+                calendar_title: "कैलेंडर",
+                cta_sim: "सिम्युलेटर का उपयोग करें"
             },
             mr: {
                 hero_title: "फिनबडी मध्ये आपले स्वागत — शिका, सिम्युलेट करा, सुरक्षित रहा.",
@@ -194,7 +206,8 @@
                 risk_desc: "लहान प्रश्नावली — तुमचा जोखीम प्रकार: Conservative, Moderate किंवा Aggressive.",
                 badges_title: "प्रगती व बॅजेस",
                 badges_desc: "मॉड्यूल्स व क्विझ पूर्ण करून बॅज मिळवा व तुमची साक्षरता प्रोफाइल तयार करा.",
-                calendar_title: "कॅलेंडर"
+                calendar_title: "कॅलेंडर",
+                cta_sim: "सिम्युलेटर वापरा"
             },
             gu: {
                 hero_title: "FinBuddy માં આપનું સ્વાગત — શીખો, સિમ્યુલેટ કરો, સુરક્ષિત રહો.",
@@ -214,7 +227,8 @@
                 risk_desc: "લઘુ પ્રશ્નાવલી — તમારો જોખમ પ્રોફાઇલ: Conservative, Moderate કે Aggressive.",
                 badges_title: "પ્રગતિ અને બેજ",
                 badges_desc: "મૉડ્યુલો અને ક્વિઝ પૂર્ણ કરીને બેજ મેળવો અને તમારી સાક્ષરતા પ્રોફાઇલ બનાવો.",
-                calendar_title: "કેલેન્ડર"
+                calendar_title: "કેલેન્ડર",
+                cta_sim: "સિમ્યુલેટર અજમાવો"
             },
             kn: {
                 hero_title: "FinBuddy ಗೆ ಸ್ವಾಗತ — ಕಲಿಯಿರಿ, ಅನುಕರಣ ಮಾಡಿ, ಸುರಕ್ಷಿತಿರಿ.",
@@ -234,7 +248,8 @@
                 risk_desc: "ಸಂಕ್ಷಿಪ್ತ ಪ್ರಶ್ನಾವಳಿ — ನಿಮ್ಮ ಅಪಾಯ ಪ್ರೊಫೈಲ್: Conservative, Moderate ಅಥವಾ Aggressive.",
                 badges_title: "ಪ್ರಗತಿ ಮತ್ತು ಬ್ಯಾಡ್ಜ್‌ಗಳು",
                 badges_desc: "ಮಾಡ್ಯೂಲ್‌ಗಳು ಮತ್ತು ಕ್ವಿಜ್‌ಗಳನ್ನು ಪೂರ್ಣಗೊಳಿಸಿ ಬ್ಯಾಡ್ಜ್‌ಗಳನ್ನು ಗಳಿಸಿ ಮತ್ತು ನಿಮ್ಮ ಸಾಕ್ಷರತಾ ಪ್ರೊಫೈಲ್ ನಿರ್ಮಿಸಿ.",
-                calendar_title: "ಕ್ಯಾಲೆಂಡರ್"
+                calendar_title: "ಕ್ಯಾಲೆಂಡರ್",
+                cta_sim: "ಸಿಮ್ಯುಲೇಟರ್ ಪ್ರಯತ್ನಿಸಿ"
             }
         };
 

@@ -79,7 +79,7 @@ groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 ########## End #################
 
 # Indian Stock Market API base configuration
-INDIAN_API_KEY = os.environ.get('FINANCE_KEY')  # Default to the provided key if not set
+INDIAN_API_KEY = "sk-live-HyFaz0NXK0RNIiShqwEgPMFdimnNrlVHfcOkxdJ2"  # Default to the provided key if not set
 INDIAN_API_BASE_URL = "https://stock.indianapi.in"
 
 # Google Gemini API configuration
@@ -143,23 +143,37 @@ API_ENDPOINTS = {
 # Unified API call function
 def call_indian_api(endpoint, params=None):
     """
-    Generic function to call the Indian Stock Market API
+    Generic function to call the Indian Stock Market API with fallback
     
     Args:
         endpoint: API endpoint suffix (e.g., '/stock', '/trending')
         params: Optional parameters for the API call
         
     Returns:
-        JSON response from the API
+        JSON response from the API or fallback data
     """
     url = f"{INDIAN_API_BASE_URL}{endpoint}"
     headers = {"X-Api-Key": INDIAN_API_KEY}
     
     try:
-        response = requests.get(url, headers=headers, params=params)
-        return response.json()
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"API returned status code: {response.status_code}")
     except Exception as e:
-        return {"error": str(e)}
+        print(f"API call failed: {e}, using fallback data")
+        
+        # Use fallback data based on endpoint
+        if endpoint == '/stock' and params and 'name' in params:
+            return get_fallback_quote(params['name'])
+        elif endpoint == '/trending':
+            return get_fallback_trending()
+        elif endpoint == '/historical_data' and params and 'stock_name' in params:
+            period = params.get('period', '1d')
+            return get_fallback_historical(params['stock_name'], period)
+        else:
+            return {"error": str(e), "fallback": True}
 
 # Function to call API by name
 def call_api_by_name(api_name, **kwargs):
@@ -679,6 +693,15 @@ def logout():
 @app.route('/dashboard')
 def index():
     return render_template('index.html', active_page='home')
+
+# Simulator Hub and Sandbox
+@app.route('/simulator')
+def simulator():
+    return render_template('simulator_hub.html', active_page='simulator')
+
+@app.route('/simulator/sandbox/<symbol>')
+def simulator_sandbox(symbol):
+    return render_template('simulator_sandbox.html', symbol=symbol.upper(), active_page='simulator')
 
 @app.route('/about')
 def about():
@@ -2107,21 +2130,12 @@ def quiz():
             elif action == 'prev' and current_page > 0:
                 current_page -= 1
         
-        session['current_page'] = current_page
-    
-    saved_answers = session.get('answers', {})
-    current_answer = saved_answers.get(str(current_page))
-    
-    return render_template('aptitudeL.html',
-                         question=questions[current_page],
-                         current_page=current_page,
-                         total_pages=total_questions,
-                         total_questions=total_questions,
-                         remaining_time=remaining_time,
-                         question_status=session.get('question_status', []),
-                         marked_for_review=session.get('marked_for_review', []),
-                         current_answer=current_answer,
-                         show_results=False)
+    return render_template('quiz.html', 
+                                               questions=questions, 
+                                               total_questions=total_questions, 
+                                               current_page=current_page, 
+                                               remaining_time=remaining_time, 
+                                               show_results=False)
 
 def calculate_score():
     if 'quiz_id' not in session:
@@ -2733,7 +2747,7 @@ def course_section(section_id):
         }
     }
     
-    # Hardcoded progress data
+    # Hardcoded progress data (simulated completed sections)
     completed = False
     
     # Get the section
@@ -2823,10 +2837,6 @@ def profile():
         'name': user_name
     }
     
-    # We don't need to pass module progress data as it's handled by JavaScript with localStorage
-    return render_template('profile.html', user=user_data, active_page='profile')
-
-# Admin route to seed course data
 @app.route('/admin/seed-course-data')
 def seed_course_data():
     # Since we're using static data, this endpoint is no longer needed
@@ -2842,6 +2852,27 @@ def login_required(f):
             return redirect(url_for('signin'))
         return f(*args, **kwargs)
     return decorated_function
+
+# Public API passthroughs for simulator UI
+@app.route('/api/market/quote')
+def api_market_quote():
+    """
+    Returns a quote for a given stock_name using the configured Indian API.
+    Example: /api/market/quote?stock_name=RELIANCE
+    """
+    stock_name = request.args.get('stock_name', '').strip()
+    if not stock_name:
+        return jsonify({'error': 'stock_name is required'}), 400
+    data = call_api_by_name('get_stock_details', stock_name=stock_name)
+    return jsonify(data)
+
+@app.route('/api/market/trending')
+def api_market_trending():
+    """
+    Returns trending stocks snapshot (education-only).
+    """
+    data = call_api_by_name('get_trending_stocks')
+    return jsonify(data)
 
 if __name__ == '__main__':
     app.run(debug=True)

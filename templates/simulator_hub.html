@@ -1,0 +1,427 @@
+{% extends "base.html" %}
+{% block title %}Simulator Hub - FinBuddy{% endblock %}
+{% block content %}
+<style>
+  .hub-wrap { padding: 28px; max-width: 1400px; margin: 0 auto; }
+  .hub-header { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:20px; flex-wrap: wrap; }
+  .hub-title { font-size:28px; font-weight:800; color:#111827; }
+  .hub-sub { font-size:14px; color:#4B5563; margin-top: 5px; }
+  
+  /* Educational Level Selector */
+  .level-selector { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px; padding: 20px; margin-bottom: 25px; color: white; }
+  .level-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
+  .level-card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 12px; padding: 15px; cursor: pointer; transition: transform 0.2s; border: 2px solid transparent; }
+  .level-card:hover { transform: translateY(-2px); background: rgba(255,255,255,0.2); }
+  .level-card.selected { border-color: #fbbf24; background: rgba(251,191,36,0.2); }
+  .level-title { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+  .level-desc { font-size: 13px; opacity: 0.9; }
+  .level-money { font-size: 18px; font-weight: 800; color: #fbbf24; margin-top: 8px; }
+  
+  /* Tips Panel */
+  .tips-panel { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-radius: 16px; padding: 20px; margin-bottom: 25px; color: white; }
+  .tip-text { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+  .tip-refresh { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .tip-refresh:hover { background: rgba(255,255,255,0.3); }
+  
+  .hub-controls { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:15px; }
+  .search-in { flex:1 1 280px; border:1px solid #e5e7eb; border-radius:12px; padding:12px 15px; font-size:14px; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; }
+  .tabs button { padding:10px 16px; border:1px solid #e5e7eb; background:#fff; border-radius:25px; font-weight:700; cursor:pointer; transition: all 0.2s; }
+  .tabs button.active { background:#111827; color:#fff; border-color:#111827; }
+  .tabs button:hover:not(.active) { background:#f3f4f6; }
+  
+  .hub-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:20px; }
+  .sb-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:20px; cursor:pointer; transition: all 0.3s; position: relative; overflow: hidden; }
+  .sb-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #667eea, #764ba2); }
+  .sb-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,.12); }
+  
+  .sb-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .sb-symbol { font-weight:800; color:#111827; font-size: 18px; }
+  .sb-name { font-size:12px; color:#6b7280; margin-top: 2px; }
+  .sb-ex { font-size:12px; color:#6b7280; }
+  .sb-price { font-size:20px; font-weight:800; color:#111827; }
+  .sb-chg { font-size:14px; font-weight:700; padding: 4px 8px; border-radius: 6px; }
+  .sb-chg.up { color:#16a34a; background: rgba(22,163,74,0.1); } 
+  .sb-chg.down { color:#dc2626; background: rgba(220,38,38,0.1); }
+  
+  .sector-tag { display: inline-block; background: #f3f4f6; color: #374151; padding: 4px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 8px; }
+  
+  .note { background:#F9FAFB; border:1px dashed #E5E7EB; border-radius:12px; padding:15px 18px; font-size:13px; color:#111827; margin-top:20px; }
+  .wl-title { font-size:18px; font-weight:800; color:#111827; margin:20px 0 12px; }
+  .star { border:none; background:transparent; cursor:pointer; font-size:18px; transition: all 0.2s; }
+  .star.on { color:#f59e0b; }
+  .star:hover { transform: scale(1.1); }
+  .note a { color:#2563eb; text-decoration:underline; }
+  
+  /* Market Stats */
+  .market-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 25px; }
+  .stat-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 15px; text-align: center; }
+  .stat-value { font-size: 20px; font-weight: 800; color: #111827; }
+  .stat-label { font-size: 12px; color: #6b7280; margin-top: 5px; }
+  .stat-change { font-size: 12px; font-weight: 600; margin-top: 5px; }
+
+  .loading { opacity: 0.6; pointer-events: none; }
+  .api-status { font-size: 11px; color: #6b7280; margin-top: 4px; }
+  .api-live { color: #16a34a; }
+  .api-fallback { color: #f59e0b; }
+</style>
+
+<section class="hub-wrap">
+  <div class="hub-header">
+    <div>
+      <div class="hub-title">🎯 Virtual Trading Simulator</div>
+      <div class="hub-sub">Learn stock trading with virtual money. Educational-only platform with realistic market simulation.</div>
+    </div>
+  </div>
+
+  <!-- Educational Level Selector -->
+  <div class="level-selector">
+    <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">🎓 Choose Your Learning Level</div>
+    <div style="font-size: 14px; opacity: 0.9;">Select your experience level to get personalized recommendations and starting virtual money</div>
+    <div class="level-grid">
+      <div class="level-card" data-level="beginner">
+        <div class="level-title">🌱 Beginner</div>
+        <div class="level-desc">New to stock trading? Start with basics and safe blue-chip stocks.</div>
+        <div class="level-money">₹50,000 Virtual Money</div>
+      </div>
+      <div class="level-card selected" data-level="intermediate">
+        <div class="level-title">📈 Intermediate</div>
+        <div class="level-desc">Know the basics? Learn portfolio management and diversification.</div>
+        <div class="level-money">₹1,00,000 Virtual Money</div>
+      </div>
+      <div class="level-card" data-level="advanced">
+        <div class="level-title">🚀 Advanced</div>
+        <div class="level-desc">Ready for advanced strategies and technical analysis.</div>
+        <div class="level-money">₹2,00,000 Virtual Money</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Educational Tips Panel -->
+  <div class="tips-panel">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <div style="font-size: 16px; font-weight: 700; margin-bottom: 5px;">💡 Trading Tip of the Day</div>
+        <div class="tip-text" id="dailyTip">Loading helpful tip...</div>
+      </div>
+      <button class="tip-refresh" onclick="refreshTip()">🔄 New Tip</button>
+    </div>
+  </div>
+
+  <!-- Market Overview -->
+  <div class="market-stats" id="marketStats">
+    <div class="stat-card loading">
+      <div class="stat-value">Loading...</div>
+      <div class="stat-label">NIFTY 50</div>
+    </div>
+    <div class="stat-card loading">
+      <div class="stat-value">Loading...</div>
+      <div class="stat-label">SENSEX</div>
+    </div>
+    <div class="stat-card loading">
+      <div class="stat-value">Loading...</div>
+      <div class="stat-label">BANK NIFTY</div>
+    </div>
+  </div>
+
+  <!-- Search and Filter Controls -->
+  <div class="hub-controls">
+    <input id="hubSearch" class="search-in" placeholder="🔍 Search stocks or indices (e.g., RELIANCE, NIFTY, TCS)" />
+    <div class="tabs" id="hubTabs">
+      <button data-filter="all" class="active">📊 All</button>
+      <button data-filter="indices">📈 Indices</button>
+      <button data-filter="stocks">🏢 Stocks</button>
+      <button data-filter="watch">⭐ Watchlist</button>
+      <button data-filter="recommended">🎯 Recommended</button>
+    </div>
+  </div>
+
+  <!-- Watchlist Section -->
+  <div id="watchGrid" class="hub-grid" style="display:none;"></div>
+
+  <!-- Main Stock Grid -->
+  <div class="hub-grid" id="hubGrid">
+    <!-- Loading state -->
+    <div class="sb-card loading">
+      <div class="sb-row">
+        <div>
+          <div class="sb-symbol">Loading...</div>
+          <div class="sb-name">Fetching market data...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Educational Note -->
+  <div class="note">
+    <strong>🎓 Educational Purpose Only:</strong> This simulator uses virtual money and educational data for learning. 
+    No real money is involved. All trades are simulated for educational purposes.
+    <br><br>
+    📚 <strong>Learn More:</strong> 
+    <a href="https://www.sebi.gov.in/sebi_data/commondocs/InvestorCharter_p.pdf" target="_blank" rel="noopener">SEBI Investor Charter</a> •
+    <a href="https://scores.gov.in" target="_blank" rel="noopener">SCORES grievance</a> •
+    <a href="https://www.nseindia.com/invest" target="_blank" rel="noopener">NSE IPF</a> •
+    <a href="https://www.bseipf.com/" target="_blank" rel="noopener">BSE IPF</a>
+  </div>
+</section>
+
+<script>
+  // Enhanced stock data
+  const HUB_ITEMS = [
+    { symbol: 'NIFTY 50', label: 'NIFTY 50', ex: 'NSE', type: 'indices', sector: 'Index', difficulty: 'intermediate', education: 'Track top 50 Indian companies' },
+    { symbol: 'NIFTY BANK', label: 'NIFTY BANK', ex: 'NSE', type: 'indices', sector: 'Banking Index', difficulty: 'advanced', education: 'Banking sector performance' },
+    { symbol: 'BSE SENSEX', label: 'SENSEX', ex: 'BSE', type: 'indices', sector: 'Index', difficulty: 'intermediate', education: 'BSE flagship index of 30 stocks' },
+    { symbol: 'Reliance Industries', label: 'RELIANCE', ex: 'NSE', type: 'stocks', sector: 'Oil & Gas', difficulty: 'beginner', education: 'India largest private company' },
+    { symbol: 'Tata Consultancy Services', label: 'TCS', ex: 'NSE', type: 'stocks', sector: 'IT Services', difficulty: 'beginner', education: 'Leading IT services company' },
+    { symbol: 'HDFC Bank', label: 'HDFC BANK', ex: 'NSE', type: 'stocks', sector: 'Banking', difficulty: 'beginner', education: 'Top private sector bank' },
+    { symbol: 'Infosys', label: 'INFOSYS', ex: 'NSE', type: 'stocks', sector: 'IT Services', difficulty: 'intermediate', education: 'Global IT consulting leader' },
+    { symbol: 'ICICI Bank', label: 'ICICI BANK', ex: 'NSE', type: 'stocks', sector: 'Banking', difficulty: 'intermediate', education: 'Leading private bank' },
+    { symbol: 'State Bank of India', label: 'SBI', ex: 'NSE', type: 'stocks', sector: 'Banking', difficulty: 'beginner', education: 'Largest public sector bank' },
+    { symbol: 'Tata Steel', label: 'TATA STEEL', ex: 'NSE', type: 'stocks', sector: 'Steel', difficulty: 'intermediate', education: 'Major steel producer' }
+  ];
+
+  // Global data cache to avoid multiple API calls
+  let marketDataCache = null;
+  let lastCacheTime = 0;
+  const CACHE_DURATION = 300000; // 5 minutes
+
+  const WATCH_KEY = 'np_watchlist_v1';
+  const LEVEL_KEY = 'np_user_level';
+  
+  function getWatch(){ try{ return JSON.parse(localStorage.getItem(WATCH_KEY))||[] }catch{ return [] } }
+  function saveWatch(list){ localStorage.setItem(WATCH_KEY, JSON.stringify(list)) }
+  function isWatched(sym){ return getWatch().includes(sym) }
+  function toggleWatch(sym){
+    const w = new Set(getWatch());
+    if (w.has(sym)) w.delete(sym); else w.add(sym);
+    saveWatch([...w]);
+    renderHub();
+  }
+
+  function getUserLevel() { return localStorage.getItem(LEVEL_KEY) || 'intermediate'; }
+  function setUserLevel(level) { localStorage.setItem(LEVEL_KEY, level); }
+
+  function refreshTip() {
+    const tip = TRADING_TIPS[Math.floor(Math.random() * TRADING_TIPS.length)];
+    document.getElementById('dailyTip').textContent = tip;
+  }
+
+  function cardTpl(item, quote = null) {
+    const price = quote?.price || quote?.current_price;
+    const chg = quote?.change_percent || quote?.chgPct;
+    const source = quote?.source;
+    
+    const chgClass = chg === null || chg === undefined ? '' : (chg >= 0 ? 'up' : 'down');
+    const chgTxt = chg === null || chg === undefined ? '—' : `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
+    const pTxt = price === null || price === undefined ? '—' : '₹' + Number(price).toLocaleString('en-IN');
+    const starOn = isWatched(item.symbol) ? 'on' : '';
+    
+    let statusText = '';
+    if (source === 'api') statusText = '<span class="api-status api-live">● Live Data</span>';
+    else if (source === 'educational_fallback') statusText = '<span class="api-status api-fallback">● Educational Data</span>';
+    
+    return `
+      <div class="sb-card" role="button" aria-label="${item.label} ${item.ex} educational trading" onclick="location.href='{{ url_for('simulator_sandbox', symbol='__S__') }}'.replace('__S__','${encodeURIComponent(item.symbol)}')">
+        <div class="sb-row">
+          <div>
+            <div class="sb-symbol">${item.label}</div>
+            <div class="sb-name">${item.education || ''}</div>
+            <div class="sb-ex">${item.ex}${statusText}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="sb-price">${pTxt}</div>
+            <div class="sb-chg ${chgClass}">${chgTxt}</div>
+          </div>
+        </div>
+        <div class="sb-row" style="margin-top:12px;">
+          <div>
+            <span class="sector-tag">${item.sector}</span>
+          </div>
+          <button class="star ${starOn}" title="Toggle watchlist" onclick="event.stopPropagation(); toggleWatch('${item.symbol}')">${starOn ? '⭐' : '☆'}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function fetchBulkMarketData() {
+    const now = Date.now();
+    
+    // Return cached data if available and fresh
+    if (marketDataCache && (now - lastCacheTime) < CACHE_DURATION) {
+      return marketDataCache;
+    }
+
+    try {
+      // Fetch bulk data from our backend API
+      const symbols = HUB_ITEMS.map(item => item.symbol);
+      const response = await fetch('/api/market/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbols })
+      });
+      
+      if (response.ok) {
+        marketDataCache = await response.json();
+        lastCacheTime = now;
+        return marketDataCache;
+      }
+    } catch (error) {
+      console.log('Bulk API failed, fetching individual quotes:', error);
+    }
+    
+    // Fallback: fetch individual quotes (less efficient but still works)
+    const quotes = {};
+    for (const item of HUB_ITEMS.slice(0, 5)) { // Limit to prevent rate limiting
+      try {
+        const response = await fetch(`/api/market/quote?stock_name=${encodeURIComponent(item.symbol)}`);
+        if (response.ok) {
+          quotes[item.symbol] = await response.json();
+        }
+      } catch (error) {
+        console.log(`Failed to fetch ${item.symbol}:`, error);
+      }
+    }
+    
+    marketDataCache = {
+      quotes,
+      trending: null,
+      news: null,
+      timestamp: now
+    };
+    lastCacheTime = now;
+    
+    return marketDataCache;
+  }
+
+  async function renderMarketStats() {
+    const data = await fetchBulkMarketData();
+    const stats = document.getElementById('marketStats');
+    const indices = ['NIFTY 50', 'BSE SENSEX', 'NIFTY BANK'];
+    let html = '';
+    
+    for (const index of indices) {
+      const quote = data.quotes[index];
+      const price = quote?.price || quote?.current_price;
+      const chg = quote?.change_percent || quote?.chgPct;
+      const changeClass = chg >= 0 ? 'up' : 'down';
+      
+      html += `
+        <div class="stat-card">
+          <div class="stat-value">${price ? '₹' + Number(price).toLocaleString('en-IN') : '—'}</div>
+          <div class="stat-label">${index}</div>
+          <div class="stat-change ${changeClass}">${chg !== null && chg !== undefined ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '—'}</div>
+        </div>
+      `;
+    }
+    
+    stats.innerHTML = html;
+  }
+
+  async function renderHub() {
+    const data = await fetchBulkMarketData();
+    const filtered = applyFilter(HUB_ITEMS);
+    const grid = document.getElementById('hubGrid');
+    
+    // Render cards with available data
+    grid.innerHTML = filtered.map(item => {
+      const quote = data.quotes[item.symbol];
+      return cardTpl(item, quote);
+    }).join('');
+
+    // Handle watchlist
+    const watchSyms = getWatch();
+    const watchWrap = document.getElementById('watchGrid');
+    const existingHeading = document.getElementById('wlHeading');
+    if (existingHeading) existingHeading.remove();
+
+    if (watchSyms.length && currentFilter !== 'watch') {
+      const wlItems = HUB_ITEMS.filter(i => watchSyms.includes(i.symbol));
+      if (wlItems.length) {
+        watchWrap.style.display = '';
+        const heading = document.createElement('div');
+        heading.id = 'wlHeading';
+        heading.className = 'wl-title';
+        heading.textContent = '⭐ Your Watchlist';
+        watchWrap.parentNode.insertBefore(heading, watchWrap);
+        watchWrap.innerHTML = wlItems.map(item => {
+          const quote = data.quotes[item.symbol];
+          return cardTpl(item, quote);
+        }).join('');
+      }
+    } else {
+      watchWrap.style.display = 'none';
+      watchWrap.innerHTML = '';
+    }
+  }
+
+  // Educational tips array
+  const TRADING_TIPS = [
+    "💡 Never invest money you cannot afford to lose",
+    "📈 Diversification helps reduce risk in your portfolio", 
+    "⏰ Time in the market beats timing the market",
+    "📚 Always research before investing in any stock",
+    "🎯 Set clear investment goals and stick to your plan",
+    "📊 Understand the company's fundamentals before buying",
+    "⚖️ Balance risk and reward in your investment decisions",
+    "💰 Start with small amounts and gradually increase",
+    "📋 Keep track of all your transactions and performance",
+    "🔍 Stay informed about market news and trends",
+    "🧠 Emotions are the biggest enemy of successful investing",
+    "📖 Learn from mistakes but don't let them discourage you",
+    "🎲 Never put all your eggs in one basket",
+    "🕐 Be patient - good investments take time to grow"
+  ];
+
+  // Event Listeners
+  document.getElementById('hubSearch').addEventListener('input', e => {
+    currentSearch = (e.target.value || '').trim();
+    renderHub();
+  });
+
+  document.getElementById('hubTabs').querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('hubTabs').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderHub();
+    });
+  });
+
+  // Level selector
+  document.querySelectorAll('.level-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.level-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      const level = card.dataset.level;
+      setUserLevel(level);
+      renderHub(); // Re-render with new recommendations
+    });
+  });
+
+  // Initialize level selection
+  const savedLevel = getUserLevel();
+  document.querySelectorAll('.level-card').forEach(card => {
+    card.classList.remove('selected');
+    if (card.dataset.level === savedLevel) {
+      card.classList.add('selected');
+    }
+  });
+
+  // Periodic refresh with cached data
+  let refreshTimer = null;
+  function startRefresh(){
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(async () => {
+      // Force cache refresh
+      lastCacheTime = 0;
+      await renderHub();
+      await renderMarketStats();
+    }, 300000); // 5 minutes to respect API limits
+  }
+
+  // Initialize
+  refreshTip();
+  renderHub().then(() => renderMarketStats());
+  startRefresh();
+</script>
+{% endblock %}

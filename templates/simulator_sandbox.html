@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}{{ symbol }} Sandbox - FinBuddy{% endblock %}
+{% block content %}
+<style>
+  .sb-wrap { padding: 24px; display:grid; grid-template-columns: 1fr; gap:16px; }
+  @media (min-width: 1024px) { .sb-wrap { grid-template-columns: 2fr 1fr; } }
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .sym { font-size:22px; font-weight:800; color:#111827; }
+  .px { font-size:20px; font-weight:800; color:#111827; }
+  .chg { font-size:12px; font-weight:700; }
+  .chg.up { color:#16a34a; } .chg.down { color:#dc2626; }
+  .tf { display:flex; gap:6px; flex-wrap:wrap; }
+  .tf button { padding:6px 10px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; font-weight:600; }
+  .tf button.active { background:#111827; color:#fff; border-color:#111827; }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; }
+  .panel h3 { font-size:16px; font-weight:800; color:#111827; margin-bottom:8px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .in { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:8px 10px; font-size:14px; }
+  .btn { padding:8px 12px; border-radius:8px; border:1px solid transparent; font-weight:700; cursor:pointer; }
+  .btn.buy { background:#10b981; color:#fff; }
+  .btn.sell { background:#ef4444; color:#fff; }
+  .btn.secondary { background:#f3f4f6; color:#111827; border-color:#e5e7eb; }
+  .table { width:100%; border-collapse: collapse; font-size:14px; }
+  .table th,.table td { border-bottom:1px solid #e5e7eb; padding:8px; text-align:left; }
+  .note { background:#F9FAFB; border:1px dashed #E5E7EB; border-radius:8px; padding:10px 12px; font-size:12px; color:#111827; margin-top:10px; }
+  #chart { height: 520px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { background:#F3F4F6; color:#111827; border:1px solid #e5e7eb; padding:4px 8px; border-radius:999px; font-size:12px; }
+  .ohlc { display:flex; gap:12px; font-size:12px; color:#374151; flex-wrap:wrap; }
+  .ohlc b { color:#111827; }
+  .summary { display:grid; grid-template-columns: repeat(2,1fr); gap:8px; margin-top:8px; font-size:13px; }
+  @media(min-width: 480px){ .summary { grid-template-columns: repeat(4,1fr); } }
+  .summary .box { background:#F9FAFB; border:1px solid #E5E7EB; border-radius:8px; padding:8px; }
+  .mtk { color:#16a34a; } .mtk.neg { color:#dc2626; }
+  .row.wrap { flex-wrap:wrap; }
+  .tf .right-tools { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .in.inline { width:auto; min-width:120px; }
+  .api-status { font-size:12px; }
+  .api-status.api-live { color:#16a34a; }
+  .api-status.api-fallback { color:#dc2626; }
+</style>
+
+<section class="sb-wrap">
+  <div>
+    <div class="topbar">
+      <div>
+        <div class="sym">{{ symbol }}</div>
+        <div class="row" style="gap:12px;">
+          <div class="px" id="px">Loading...</div>
+          <div class="chg" id="chg">—</div>
+          <div id="dataSource" class="api-status">Fetching data...</div>
+        </div>
+        <!-- New: OHLC on hover -->
+        <div id="ohlc" class="ohlc" aria-live="polite">
+          <span>Date: <b>—</b></span>
+          <span>O: <b>—</b></span>
+          <span>H: <b>—</b></span>
+          <span>L: <b>—</b></span>
+          <span>C: <b>—</b></span>
+        </div>
+      </div>
+      <div class="row wrap">
+        <div class="chips" aria-label="compliance chips">
+          <span class="chip">Education-only</span>
+          <span class="chip">15-min delayed</span>
+          <span class="chip">No advice</span>
+        </div>
+        <div class="row right-tools">
+          <div class="tf" id="tf">
+            <button data-p="1d" class="active">1D</button>
+            <button data-p="1w">1W</button>
+            <button data-p="1m">1M</button>
+            <button data-p="3m">3M</button>
+            <button data-p="1y">1Y</button>
+          </div>
+          <!-- New: playback speed -->
+          <select id="speed" class="in inline" title="Playback speed">
+            <option value="200">1x</option>
+            <option value="120">2x</option>
+            <option value="60">4x</option>
+          </select>
+          <button class="btn secondary" id="play">Play Simulation</button>
+          <button class="btn secondary" id="refresh">Refresh</button>
+          <label style="font-size:12px; color:#374151;">
+            <input type="checkbox" id="auto" /> Auto-refresh
+          </label>
+          <!-- NEW: demo candles toggle -->
+          <label style="font-size:12px; color:#374151;">
+            <input type="checkbox" id="demo" /> Demo candles
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:0;">
+      <div id="chart"></div>
+    </div>
+
+    <div class="summary">
+      <div class="box">Cash<br><b id="sumCash">—</b></div>
+      <div class="box">Market Value<br><b id="sumMkt">—</b></div>
+      <div class="box">Total Equity<br><b id="sumEq">—</b></div>
+      <div class="box">P/L<br><b id="sumPL" class="mtk">—</b></div>
+    </div>
+
+    <div class="note">
+      Education-only. Candlestick data is delayed. Playback animates historical progression to demonstrate volatility and risk.
+      See: <a href="https://www.sebi.gov.in/sebi_data/commondocs/InvestorCharter_p.pdf" target="_blank" rel="noopener">SEBI Investor Charter</a> •
+      <a href="https://scores.gov.in" target="_blank" rel="noopener">SCORES</a>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h3>Order Panel</h3>
+      <div class="row"><input id="qty" type="number" min="1" value="1" class="in" /></div>
+      <!-- New: order type and limit price -->
+      <div class="row" style="margin-top:8px; gap:8px;">
+        <select id="ordType" class="in inline" title="Order Type">
+          <option value="market">Market</option>
+          <option value="limit">Limit</option>
+        </select>
+        <input id="limitPx" type="number" min="0" step="0.05" class="in inline" placeholder="Limit price" style="display:none;" />
+        <div style="font-size:12px; color:#6b7280;">Est. Cost: <b id="estCost">—</b></div>
+      </div>
+      <div class="row" style="margin-top:8px; gap:8px;">
+        <button class="btn buy" id="buyBtn">Buy</button>
+        <button class="btn sell" id="sellBtn">Sell</button>
+        <button class="btn secondary" id="resetBtn">Reset Wallet</button>
+      </div>
+      <div style="margin-top:10px; font-size:12px; color:#6b7280;">
+        Wallet: <b id="wallet">₹0</b>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:12px;">
+      <h3>Positions</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Symbol</th><th>Qty</th><th>Avg</th><th>LTP</th><th>P/L</th><th>P/L%</th>
+          </tr>
+        </thead>
+        <tbody id="posBody"><tr><td colspan="6" style="color:#6b7280;">No positions yet.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+  const SYMBOL = "{{ symbol }}";
+
+  // Series/Chart
+  const container = document.getElementById('chart');
+  const chart = LightweightCharts.createChart(container, {
+    layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#111827' },
+    grid: { vertLines: { color: '#f3f4f6' }, horzLines: { color: '#f3f4f6' } },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false }
+  });
+  const series = chart.addCandlestickSeries({
+    upColor: '#16a34a', downColor: '#dc2626', wickUpColor: '#16a34a', wickDownColor: '#dc2626', borderVisible: false
+  });
+
+  function setPrice(px, chgPct, source = null) {
+    document.getElementById('px').textContent = px === null ? 'Loading...' : '₹' + px.toLocaleString('en-IN');
+    const chg = document.getElementById('chg');
+    if (chgPct === null) { chg.textContent = '—'; chg.className = 'chg'; } 
+    else {
+      const cls = chgPct >= 0 ? 'chg up' : 'chg down';
+      chg.className = cls;
+      chg.textContent = (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%';
+    }
+    
+    // Show data source
+    const sourceEl = document.getElementById('dataSource');
+    if (source === 'api') {
+      sourceEl.textContent = '● Live Data';
+      sourceEl.className = 'api-status api-live';
+    } else if (source === 'educational_fallback') {
+      sourceEl.textContent = '● Educational Data';
+      sourceEl.className = 'api-status api-fallback';
+    } else {
+      sourceEl.textContent = '';
+    }
+  }
+
+  async function fetchQuote() {
+    try {
+      const r = await fetch(`/api/market/quote?stock_name=${encodeURIComponent(SYMBOL)}`);
+      const d = await r.json();
+      const price = d.price || d.current_price || d.ltp || d.last_price || (d.data && (d.data.ltp || d.data.price)) || null;
+      const pct = d.change_percent || d.chgPct || (d.data && d.data.change_percent) || null;
+      const source = d.source;
+      setPrice(price ? Number(price) : null, pct !== null ? Number(pct) : null, source);
+    } catch (e) { 
+      setPrice(null, null, 'error'); 
+    }
+  }
+
+  // Resilient historical loader + sample fallback
+  const PERIOD_ALIASES = {
+    '1d': ['1d','1D','day','1day','1_day','daily'],
+    '1w': ['1w','1W','week','1week','1_week','weekly','5d','5D'],
+    '1m': ['1m','1M','month','1month','1_month','30d','30D'],
+    '3m': ['3m','3M','quarter','3_month','90d'],
+    '1y': ['1y','1Y','year','1year','1_year','365d']
+  };
+  function parseHistoricalPayload(d){
+    const rows = d?.data || d?.history || d?.prices || (Array.isArray(d) ? d : []);
+    const out = (rows||[]).map(x=>{
+      if (Array.isArray(x)) {
+        const ts = typeof x[0] === 'number' ? x[0] : Date.parse(x[0]);
+        if (!ts) return null;
+        const o=+x[1],h=+x[2],l=+x[3],c=+x[4];
+        return { time: Math.floor(ts/1000), open:o, high:h, low:l, close:c };
+      }
+      const t = x.timestamp || x.time || x.date || x.Date || x.t || null;
+      const ts = t ? Math.floor(new Date(t).getTime()/1000) : (x.ts ? Math.floor(+x.ts/1000) : null);
+      const o = Number(x.open ?? x.o ?? x.Open ?? x.start ?? x.price_open ?? x.openPrice ?? 0);
+      const h = Number(x.high ?? x.h ?? x.High ?? x.max ?? x.price_high ?? x.highPrice ?? o);
+      const l = Number(x.low  ?? x.l ?? x.Low  ?? x.min ?? x.price_low  ?? x.lowPrice  ?? o);
+      const c = Number(x.close?? x.c ?? x.Close?? x.end ?? x.price_close?? x.closePrice?? o);
+      return (ts && isFinite(o) && isFinite(h) && isFinite(l) && isFinite(c)) ? { time: ts, open:o, high:h, low:l, close:c } : null;
+    }).filter(Boolean);
+    out.sort((a,b)=>a.time-b.time);
+    return out;
+  }
+  function generateSampleCandles() {
+    // Educational synthetic series (marked by toggle). Not real market data.
+    const out = [];
+    const now = Date.now();
+    let price = 100 + Math.random()*50;
+    const n = 120;
+    const step = 24*60*60*1000;
+    for (let i=n-1;i>=0;i--) {
+      const t = Math.floor((now - i*step)/1000);
+      const drift = (Math.random()*2 - 1) * 1.2;
+      const o = price;
+      const c = Math.max(1, o + drift);
+      const h = Math.max(o,c) + Math.random()*1.1;
+      const l = Math.min(o,c) - Math.random()*1.1;
+      out.push({ time:t, open:+o.toFixed(2), high:+h.toFixed(2), low:+l.toFixed(2), close:+c.toFixed(2) });
+      price = c;
+    }
+    return out;
+  }
+  async function fetchHistorical(periodKey) {
+    const aliases = PERIOD_ALIASES[periodKey] || [periodKey];
+    for (const alias of aliases) {
+      try {
+        const r = await fetch(`/api/market/historical?stock_name=${encodeURIComponent(SYMBOL)}&period=${encodeURIComponent(alias)}`);
+        if (!r.ok) continue;
+        const d = await r.json();
+        const parsed = parseHistoricalPayload(d);
+        if (parsed?.length) return parsed;
+      } catch {}
+    }
+    if (document.getElementById('demo')?.checked) return generateSampleCandles();
+    return null;
+  }
+
+  // Timeframe controls
+  const TF = document.getElementById('tf');
+  let currentTf = '1d';
+  TF.querySelectorAll('button').forEach(b => b.addEventListener('click', async () => {
+    TF.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    currentTf = b.dataset.p;
+    const data = await fetchHistorical(currentTf);
+    if (data) series.setData(data);
+  }));
+
+  // Crosshair OHLC
+  chart.subscribeCrosshairMove(param => {
+    const el = document.getElementById('ohlc');
+    if (!param || !param.time || !param.seriesData) { el.innerHTML = '<span>Date: <b>—</b></span><span>O: <b>—</b></span><span>H: <b>—</b></span><span>L: <b>—</b></span><span>C: <b>—</b></span>'; return; }
+    const d = param.seriesData.get(series);
+    if (!d) return;
+    const dt = new Date((param.time)*1000);
+    el.innerHTML = `<span>Date: <b>${dt.toLocaleString()}</b></span><span>O: <b>${d.open?.toFixed?.(2) ?? '—'}</b></span><span>H: <b>${d.high?.toFixed?.(2) ?? '—'}</b></span><span>L: <b>${d.low?.toFixed?.(2) ?? '—'}</b></span><span>C: <b>${d.close?.toFixed?.(2) ?? '—'}</b></span>`;
+  });
+
+  // Playback
+  let playTimer = null;
+  document.getElementById('play').addEventListener('click', async () => {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; document.getElementById('play').textContent='Play Simulation'; return; }
+    const data = await fetchHistorical(currentTf);
+    if (!data || data.length < 10) return;
+    series.setData([]);
+    let i = 0;
+    const speed = Number(document.getElementById('speed').value || 200);
+    document.getElementById('play').textContent='Pause';
+    playTimer = setInterval(() => {
+      if (i >= data.length) { clearInterval(playTimer); playTimer = null; document.getElementById('play').textContent='Play Simulation'; return; }
+      series.update(data[i]);
+      setPrice(data[i].close, i ? ((data[i].close - data[0].close) / data[0].close) * 100 : 0);
+      i++;
+    }, speed);
+  });
+
+  // Manual/auto refresh
+  document.getElementById('refresh').addEventListener('click', async () => {
+    await fetchQuote();
+    const data = await fetchHistorical(currentTf);
+    if (data) series.setData(data);
+    refreshPortfolio();
+  });
+  document.getElementById('auto').addEventListener('change', e => { if (e.target.checked) startAuto(); else stopAuto(); });
+  let autoTimer=null;
+  function startAuto(){ stopAuto(); autoTimer=setInterval(async ()=>{ await fetchQuote(); refreshPortfolio(); }, 60000); }
+  function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+
+  // Resize handling
+  function resizeChart(){ chart.resize(container.clientWidth, container.clientHeight); }
+  window.addEventListener('resize', resizeChart);
+  setTimeout(resizeChart, 0);
+
+  // Init
+  (async () => {
+    await fetchQuote();
+    const data = await fetchHistorical(currentTf);
+    if (data) series.setData(data);
+  })();
+
+  // Local demo wallet
+  const SIM_KEY = 'np_sim_state_v1';
+  const DEFAULT_BALANCE = 100000;
+  function loadState() {
+    try { const raw = localStorage.getItem(SIM_KEY); if (!raw) return { balance: DEFAULT_BALANCE, positions: {} };
+      const s = JSON.parse(raw); if (typeof s.balance !== 'number' || !s.positions) throw 0; return s;
+    } catch { return { balance: DEFAULT_BALANCE, positions: {} }; }
+  }
+  function saveState(s){ localStorage.setItem(SIM_KEY, JSON.stringify(s)); }
+  function fmt(n){ return '₹' + (n||0).toLocaleString('en-IN', { maximumFractionDigits: 2 }); }
+  // Keep renderState wallet-only; positions handled by refreshPortfolio()
+  function renderState(){
+    const s = loadState();
+    document.getElementById('wallet').textContent = fmt(s.balance);
+  }
+
+  async function getPrice() {
+    try {
+      const r = await fetch(`/api/market/quote?stock_name=${encodeURIComponent(SYMBOL)}`);
+      const d = await r.json();
+      const price = d.price || d.current_price || d.ltp || d.last_price || (d.data && (d.data.ltp || d.data.price)) || null;
+      return price ? Number(price) : null;
+    } catch { return null; }
+  }
+
+  // Portfolio with P/L (restored)
+  async function refreshPortfolio(){
+    const s = loadState();
+    let mktValue = 0, pl = 0;
+    const body = document.getElementById('posBody'); body.innerHTML = '';
+    const syms = Object.keys(s.positions);
+    if (!syms.length) {
+      body.innerHTML = '<tr><td colspan="6" style="color:#6b7280;">No positions yet.</td></tr>';
+    } else {
+      for (const sym of syms) {
+        let ltp = null;
+        try {
+          const r = await fetch(`/api/market/quote?stock_name=${encodeURIComponent(sym)}`);
+          const d = await r.json();
+          ltp = Number(d.price || d.current_price || d.ltp || d.last_price || (d.data && (d.data.ltp || d.data.price)) || null) || null;
+        } catch {}
+        const p = s.positions[sym];
+        const value = (ltp || 0) * p.qty;
+        const upl = (ltp ? (ltp - p.avg) : 0) * p.qty;
+        const uplPct = ltp ? ((ltp - p.avg)/p.avg)*100 : 0;
+        mktValue += value;
+        pl += upl;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${sym}</td><td>${p.qty}</td><td>${fmt(p.avg)}</td><td>${ltp?fmt(ltp):'—'}</td><td style="color:${upl>=0?'#16a34a':'#dc2626'}">${upl>=0?'+':''}${fmt(Math.abs(upl))}</td><td style="color:${upl>=0?'#16a34a':'#dc2626'}">${isFinite(uplPct)?(uplPct>=0?'+':'')+uplPct.toFixed(2)+'%':'—'}</td>`;
+        body.appendChild(tr);
+      }
+    }
+    document.getElementById('sumCash').textContent = fmt(s.balance);
+    document.getElementById('sumMkt').textContent = fmt(mktValue);
+    document.getElementById('sumEq').textContent = fmt(s.balance + mktValue);
+    const plEl = document.getElementById('sumPL');
+    plEl.textContent = (pl>=0?'+':'') + fmt(Math.abs(pl));
+    plEl.className = 'mtk' + (pl<0?' neg':'');
+  }
+
+  // Order type UI + est cost (unchanged)
+  const ordTypeEl = document.getElementById('ordType');
+  const limitEl = document.getElementById('limitPx');
+  const qtyEl = document.getElementById('qty');
+  const estEl = document.getElementById('estCost');
+  ordTypeEl.addEventListener('change', () => { const isLimit = ordTypeEl.value === 'limit'; limitEl.style.display = isLimit ? '' : 'none'; updateEst(); });
+  limitEl.addEventListener('input', updateEst);
+  qtyEl.addEventListener('input', updateEst);
+  async function updateEst(){
+    const qty = Math.max(1, Number(qtyEl.value||0));
+    let px = null;
+    if (ordTypeEl.value === 'limit') px = Number(limitEl.value||0) || null;
+    else px = await getPrice();
+    estEl.textContent = (px && qty) ? fmt(px*qty) : '—';
+  }
+
+  // Buy/Sell/Reset handlers (unchanged logic)
+  document.getElementById('buyBtn').addEventListener('click', async () => {
+    const qty = Math.max(1, Number(document.getElementById('qty').value || 0));
+    const s = loadState();
+    let execPx = null;
+    if (ordTypeEl.value === 'limit') {
+      execPx = Number(limitEl.value||0);
+      if (!execPx) return alert('Enter a valid limit price');
+    } else {
+      execPx = await getPrice(); if (!execPx) return alert('Quote unavailable');
+    }
+    const cost = execPx * qty;
+    if (s.balance < cost) return alert('Insufficient balance');
+    s.balance -= cost;
+    if (!s.positions[SYMBOL]) s.positions[SYMBOL] = { qty: 0, avg: 0 };
+    const pos = s.positions[SYMBOL];
+    const newQty = pos.qty + qty;
+    const newAvg = (pos.qty * pos.avg + cost)/newQty;
+    s.positions[SYMBOL] = { qty:newQty, avg:newAvg };
+    saveState(s); renderState(); refreshPortfolio();
+    alert(`Simulated buy filled at ₹${execPx.toFixed(2)} (education-only)`);
+  });
+  document.getElementById('sellBtn').addEventListener('click', async () => {
+    const qty = Math.max(1, Number(document.getElementById('qty').value || 0));
+    const s = loadState(); const pos = s.positions[SYMBOL];
+    if (!pos || pos.qty < qty) return alert('Not enough holdings');
+    let execPx = null;
+    if (ordTypeEl.value === 'limit') {
+      execPx = Number(limitEl.value||0);
+      if (!execPx) return alert('Enter a valid limit price');
+    } else {
+      execPx = await getPrice(); if (!execPx) return alert('Quote unavailable');
+    }
+    s.balance += execPx * qty;
+    const rem = pos.qty - qty;
+    if (rem <= 0) delete s.positions[SYMBOL]; else s.positions[SYMBOL] = { qty: rem, avg: pos.avg };
+    saveState(s); renderState(); refreshPortfolio();
+    alert(`Simulated sell filled at ₹${execPx.toFixed(2)} (education-only)`);
+  });
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    if (!confirm('Reset demo wallet and positions?')) return;
+    saveState({ balance: DEFAULT_BALANCE, positions: {} }); renderState(); refreshPortfolio();
+  });
+
+  // First render
+  renderState();
+  refreshPortfolio();
+  updateEst();
+</script>
+{% endblock %}
