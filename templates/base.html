@@ -62,14 +62,14 @@
                     </a>
                 </li>
 
-                <li class="nav-item {% if active_page == 'assessment' %}active{% endif %}">
+                <!-- <li class="nav-item {% if active_page == 'assessment' %}active{% endif %}">
                     <b></b>
                     <b></b>
                     <a href="{{ url_for('assessment') }}">
                        <i class="fa-solid fa-spell-check nav-icon"></i>
                         <span class="nav-text">Assessment</span>
                     </a>
-                </li>
+                </li> -->
                 
                 <li class="nav-item {% if active_page == 'notes' %}active{% endif %}">
                     <b></b>
@@ -131,6 +131,132 @@
 
     <!-- Include the sidebar chatbot -->
     {% include 'sidebar_chatbot.html' %}
+
+    <!-- Global i18n (EN, HI, MR, GU, KN) -->
+    <script>
+        // Minimal dictionary focused on index.html keys
+        window.APP_I18N = {
+            en: {
+                hero_title: "Welcome to FinBuddy — Learn. Simulate. Stay Safe.",
+                hero_subtitle: "Multilingual, SEBI-aligned learning with safe simulations and scam awareness for India’s retail investors.",
+                cta_start: "Start Learning",
+                sim_soon: "Try Simulator (Coming Soon)",
+                tools_title: "Available Features & Tools",
+                tools_sub: "Educate, engage, and empower retail investors — multilingual and SEBI-aligned.",
+                edu_banner: "Education-only: This platform does not provide investment advice. Content references SEBI/NISM/IPF sources for learning.",
+                learning_title: "Learning Hub (Multi-language)",
+                learning_desc: "Bite-sized modules on basics, risks, diversification, and advanced topics with NISM/NFLQ-style quizzes.",
+                simulator_title: "Virtual Trading Simulator",
+                simulator_desc: "Practice with ₹1L demo wallet on 15-min delayed NSE/BSE data — safe sandbox to learn by doing.",
+                scam_title: "Scam & Fraud Literacy",
+                scam_desc: "Interactive “Spot the Scam” cases based on real SEBI enforcement actions. Learn to detect red flags.",
+                risk_title: "Risk Assessment",
+                risk_desc: "Short questionnaire to understand your risk persona — Conservative, Moderate, or Aggressive.",
+                badges_title: "Progress & Badges",
+                badges_desc: "Complete modules and quizzes to earn badges and build your literacy profile.",
+                calendar_title: "Calendar"
+            },
+            hi: {
+                hero_title: "फिनबडी में आपका स्वागत है — सीखें, सिमुलेट करें, सुरक्षित रहें।",
+                hero_subtitle: "मल्टीलिंगुअल, SEBI-अनुरूप शिक्षा, सुरक्षित सिमुलेशन और घोटाला-जागरूकता — भारतीय खुदरा निवेशकों के लिए।",
+                cta_start: "सीखना शुरू करें",
+                sim_soon: "सिम्युलेटर आज़माएं (जल्द आ रहा है)",
+                tools_title: "उपलब्ध फीचर्स और उपकरण",
+                tools_sub: "खुदरा निवेशकों को शिक्षित करें, जोड़ें और सशक्त बनाएं — बहुभाषी और SEBI-अनुरूप।",
+                edu_banner: "केवल शिक्षा: यह प्लेटफ़ॉर्म निवेश सलाह नहीं देता। सामग्री सीखने हेतु SEBI/NISM/IPF स्रोतों का संदर्भ लेती है।",
+                learning_title: "लर्निंग हब (बहुभाषी)",
+                learning_desc: "बेसिक्स, जोखिम, विविधीकरण और उन्नत विषयों पर छोटे-छोटे मॉड्यूल, NISM/NFLQ-शैली क्विज़ के साथ।",
+                simulator_title: "वर्चुअल ट्रेडिंग सिम्युलेटर",
+                simulator_desc: "₹1 लाख डेमो वॉलेट के साथ 15-मिन देरी वाले NSE/BSE डेटा पर अभ्यास — सुरक्षित सैंडबॉक्स।",
+                scam_title: "स्कैम और धोखाधड़ी साक्षरता",
+                scam_desc: "वास्तविक SEBI प्रवर्तन मामलों पर आधारित इंटरैक्टिव “स्कैम पहचानें” अभ्यास।",
+                risk_title: "जोखिम आकलन",
+                risk_desc: "छोटा प्रश्नावली — आपका जोखिम प्रोफ़ाइल: कंजरवेटिव, मॉडरेट या एग्रेसिव।",
+                badges_title: "प्रगति और बैज",
+                badges_desc: "मॉड्यूल और क्विज़ पूरे करें, बैज अर्जित करें और अपनी साक्षरता प्रोफ़ाइल बनाएं।",
+                calendar_title: "कैलेंडर"
+            },
+            mr: {
+                hero_title: "फिनबडी मध्ये आपले स्वागत — शिका, सिम्युलेट करा, सुरक्षित रहा.",
+                hero_subtitle: "बहुभाषिक, SEBI-सुसंगत शिक्षण, सुरक्षित सिम्युलेशन्स व फसवणूक-जागरूकता — भारतीय किरकोळ गुंतवणूकदारांसाठी.",
+                cta_start: "शिकणे सुरू करा",
+                sim_soon: "सिम्युलेटर वापरून पाहा (लवकरच)",
+                tools_title: "उपलब्ध वैशिष्ट्ये व साधने",
+                tools_sub: "किरकोळ गुंतवणूकदारांना शिक्षित, संलग्न व सक्षम करा — बहुभाषिक आणि SEBI अनुरूप.",
+                edu_banner: "फक्त शिक्षणासाठी: हे प्लॅटफॉर्म गुंतवणूक सल्ला देत नाही. सामग्री SEBI/NISM/IPF स्त्रोतांवर आधारित आहे.",
+                learning_title: "लर्निंग हब (बहुभाषिक)",
+                learning_desc: "बेसिक्स, जोखीम, विविधीकरण व प्रगत विषयांवरील संक्षिप्त मॉड्यूल्स, NISM/NFLQ-शैली क्विझसह.",
+                simulator_title: "व्हर्च्युअल ट्रेडिंग सिम्युलेटर",
+                simulator_desc: "₹1 लाख डेमो वॉलेटसह 15-मिन विलंबित NSE/BSE डेटावर सराव — सुरक्षित सॅन्डबॉक्स.",
+                scam_title: "स्कॅम व फसवणूक साक्षरता",
+                scam_desc: "खऱ्या SEBI कारवाईच्या प्रकरणांवर आधारित “स्कॅम ओळखा” इंटरॅक्टिव्ह सराव.",
+                risk_title: "जोखीम मूल्यांकन",
+                risk_desc: "लहान प्रश्नावली — तुमचा जोखीम प्रकार: Conservative, Moderate किंवा Aggressive.",
+                badges_title: "प्रगती व बॅजेस",
+                badges_desc: "मॉड्यूल्स व क्विझ पूर्ण करून बॅज मिळवा व तुमची साक्षरता प्रोफाइल तयार करा.",
+                calendar_title: "कॅलेंडर"
+            },
+            gu: {
+                hero_title: "FinBuddy માં આપનું સ્વાગત — શીખો, સિમ્યુલેટ કરો, સુરક્ષિત રહો.",
+                hero_subtitle: "બહુભાષી, SEBI-અનુરૂપ શીખણ, સુરક્ષિત સિમ્યુલેશન અને સ્કેમ જાગૃતિ — ભારતીય રિટેલ રોકાણકારો માટે.",
+                cta_start: "શીખવું શરૂ કરો",
+                sim_soon: "સિમ્યુલેટર અજમાવો (જલદી જ)",
+                tools_title: "ઉપલબ્ધ ફીચર્સ અને ટૂલ્સ",
+                tools_sub: "રિટેલ રોકાણકારોને શિક્ષિત, જોડાયેલા અને સશક્ત બનાવો — બહુભાષી અને SEBI-અનુરૂપ.",
+                edu_banner: "ફક્ત શિક્ષણ માટે: આ પ્લેટફોર્મ રોકાણ સલાહ આપતું નથી. સામગ્રી SEBI/NISM/IPF સ્ત્રોતો પર આધારિત છે.",
+                learning_title: "લર્નિંગ હબ (બહુભાષી)",
+                learning_desc: "મૂલભૂત, જોખમ, ડાયવર્સિફિકેશન અને અદ્યતન વિષયોના નાના મોડીયૂલ્સ, NISM/NFLQ-શૈલી ક્વિઝ સાથે.",
+                simulator_title: "વર્ચ્યુઅલ ટ્રેડિંગ સિમ્યુલેટર",
+                simulator_desc: "₹1 લાખ ડેમો વોલેટ સાથે 15-મિન વિલંબિત NSE/BSE ડેટા પર પ્રેક્ટિસ — સુરક્ષિત સૅન્ડબૉક્સ.",
+                scam_title: "સ્કેમ અને છેતરપિંડી સાક્ષરતા",
+                scam_desc: "SEBI અમલવારી કેસો આધારિત “સ્કેમ ઓળખો” ઇન્ટરેક્ટિવ પ્રવૃત્તિઓ.",
+                risk_title: "જોખમ મૂલ્યાંકન",
+                risk_desc: "લઘુ પ્રશ્નાવલી — તમારો જોખમ પ્રોફાઇલ: Conservative, Moderate કે Aggressive.",
+                badges_title: "પ્રગતિ અને બેજ",
+                badges_desc: "મૉડ્યુલો અને ક્વિઝ પૂર્ણ કરીને બેજ મેળવો અને તમારી સાક્ષરતા પ્રોફાઇલ બનાવો.",
+                calendar_title: "કેલેન્ડર"
+            },
+            kn: {
+                hero_title: "FinBuddy ಗೆ ಸ್ವಾಗತ — ಕಲಿಯಿರಿ, ಅನುಕರಣ ಮಾಡಿ, ಸುರಕ್ಷಿತಿರಿ.",
+                hero_subtitle: "ಬಹುಭಾಷಾ, SEBI ಹೊಂದಾಣಿಕೆಯ ಕಲಿಕೆ, ಸುರಕ್ಷಿತ ಸಿಮ್ಯುಲೇಷನ್ ಮತ್ತು ವಂಚನೆ ಜಾಗೃತಿ — ಭಾರತದ ಚಿಲ್ಲರೆ ಹೂಡಿಕೆದಾರರಿಗೆ.",
+                cta_start: "ಕಲಿಕೆ ಪ್ರಾರಂಭಿಸಿ",
+                sim_soon: "ಸಿಮ್ಯುಲೇಟರ್ ಪ್ರಯತ್ನಿಸಿ (ಶೀಘ್ರದಲ್ಲೇ)",
+                tools_title: "ಲಭ್ಯವಿರುವ ವೈಶಿಷ್ಟ್ಯಗಳು ಮತ್ತು ಸಾಧನಗಳು",
+                tools_sub: "ಚಿಲ್ಲರೆ ಹೂಡಿಕೆದಾರರನ್ನು ಶಿಕ್ಷಣಗೊಳಿಸಿ, ತೊಡಗಿಸಿ ಮತ್ತು ಸಬಲಗೊಳಿಸಿ — ಬಹುಭಾಷಾ ಮತ್ತು SEBI ಹೊಂದಾಣಿಕೆ.",
+                edu_banner: "ಶಿಕ್ಷಣಕ್ಕಾಗಿ ಮಾತ್ರ: ಈ ವೇದಿಕೆ ಹೂಡಿಕೆ ಸಲಹೆ ನೀಡುವುದಿಲ್ಲ. ವಿಷಯ SEBI/NISM/IPF ಮೂಲಗಳ ಆಧಾರಿತವಾಗಿದೆ.",
+                learning_title: "ಲರ್ನಿಂಗ್ ಹಬ್ (ಬಹುಭಾಷಾ)",
+                learning_desc: "ಮೂಲಭೂತ, ಅಪಾಯ, ವಿವಿಧೀಕರಣ ಮತ್ತು ಉನ್ನತ ವಿಷಯಗಳ ಸಣ್ಣ ಘಟಕಗಳು, NISM/NFLQ ಶೈಲಿಯ ಕ್ವಿಜ್‌ಗಳೊಂದಿಗೆ.",
+                simulator_title: "ವರ್ಚುವಲ್ ಟ್ರೇಡಿಂಗ್ ಸಿಮ್ಯುಲೇಟರ್",
+                simulator_desc: "₹1 ಲಕ್ಷ ಡೆಮೊ ವಾಲೆಟ್‌ನೊಂದಿಗೆ 15-ನಿಮಿಷ ವಿಳಂಬದ NSE/BSE ಡೇಟಾದಲ್ಲಿ ಅಭ್ಯಾಸ — ಸುರಕ್ಷಿತ ಸ್ಯಾಂಡ್ಬಾಕ್ಸ್.",
+                scam_title: "ಮೋಸ ಮತ್ತು ವಂಚನೆ ಸಾಕ್ಷರತೆ",
+                scam_desc: "ನಿಜವಾದ SEBI ಜಾರಿಗೆ ಸಂಬಂಧಿಸಿದ ಪ್ರಕರಣಗಳ ಆಧಾರಿತ “ಮೋಸ ಗುರುತಿಸಿ” ಸಂವಹನಾತ್ಮಕ ಅಭ್ಯಾಸಗಳು.",
+                risk_title: "ಅಪಾಯ ಮೌಲ್ಯಮಾಪನ",
+                risk_desc: "ಸಂಕ್ಷಿಪ್ತ ಪ್ರಶ್ನಾವಳಿ — ನಿಮ್ಮ ಅಪಾಯ ಪ್ರೊಫೈಲ್: Conservative, Moderate ಅಥವಾ Aggressive.",
+                badges_title: "ಪ್ರಗತಿ ಮತ್ತು ಬ್ಯಾಡ್ಜ್‌ಗಳು",
+                badges_desc: "ಮಾಡ್ಯೂಲ್‌ಗಳು ಮತ್ತು ಕ್ವಿಜ್‌ಗಳನ್ನು ಪೂರ್ಣಗೊಳಿಸಿ ಬ್ಯಾಡ್ಜ್‌ಗಳನ್ನು ಗಳಿಸಿ ಮತ್ತು ನಿಮ್ಮ ಸಾಕ್ಷರತಾ ಪ್ರೊಫೈಲ್ ನಿರ್ಮಿಸಿ.",
+                calendar_title: "ಕ್ಯಾಲೆಂಡರ್"
+            }
+        };
+
+        function applyI18n(lang) {
+            const dict = window.APP_I18N[lang] || window.APP_I18N.en;
+            document.documentElement.lang = lang === 'en' ? 'en' : lang;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (key && dict[key]) el.textContent = dict[key];
+            });
+        }
+
+        window.setAppLang = function(lang) {
+            localStorage.setItem('np_lang', lang);
+            applyI18n(lang);
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('np_lang') || 'en';
+            applyI18n(saved);
+        });
+    </script>
 
     <script>
         const navItems = document.querySelectorAll(".nav-item");

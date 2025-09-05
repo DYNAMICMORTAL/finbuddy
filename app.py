@@ -43,12 +43,12 @@ load_dotenv()
 from google import genai
 from google.genai import types
 
-import firebase_admin
-from firebase_admin import credentials, auth
+# import firebase_admin
+# from firebase_admin import credentials, auth
 
 # Initialize Firebase Admin SDK
-cred = credentials.Certificate("finbuddy-141ea-firebase-adminsdk-fbsvc-20a9da85e3.json")  # Replace with your Firebase Admin SDK JSON file
-firebase_admin.initialize_app(cred)
+# cred = credentials.Certificate("finbuddy-141ea-firebase-adminsdk-fbsvc-20a9da85e3.json")  # Replace with your Firebase Admin SDK JSON file
+# firebase_admin.initialize_app(cred)
 
 app = Flask(__name__)
 Bootstrap(app)
@@ -437,15 +437,11 @@ def get_gemma_response_fallback(query):
 
 @app.route('/chatbot')
 def chatbot():
-    # Check if user is logged in
-    if 'user_id' not in session:
-        flash('Please log in to access this page.', 'warning')
-        return redirect(url_for('signin'))
     return render_template('chatbot.html', active_page='chatbot')
 
-@app.route('/dashboard')
-def dashboard():
-    return render_template('dashboard.html', active_page='dashboard')
+# @app.route('/dashboard')
+# def dashboard():
+#     return render_template('dashboard.html', active_page='dashboard')
 
 @app.route('/ask', methods=['POST'])
 def ask():
@@ -629,10 +625,8 @@ def landingpage():
 
 @app.route('/signin')
 def signin():
-    # If user is already logged in, redirect to chatbot
-    if 'user_id' in session:
-        return redirect(url_for('chatbot'))
-    return render_template('signin.html', active_page='home')
+    # Directly redirect to chatbot
+    return redirect(url_for('chatbot'))
 
 @app.route('/auth', methods=['POST'])
 def authenticate():
@@ -643,35 +637,35 @@ def authenticate():
             return jsonify({'error': 'No ID token provided'}), 400
             
         # Verify the ID token
-        decoded_token = auth.verify_id_token(id_token)
+        # decoded_token = auth.verify_id_token(id_token)
         
         # Get user info
-        user_id = decoded_token['uid']
-        email = decoded_token.get('email', '')
-        name = decoded_token.get('name', '')
+        # user_id = decoded_token['uid']
+        # email = decoded_token.get('email', '')
+        # name = decoded_token.get('name', '')
         
         # If name is not in token, try to get it from Firebase Auth
-        if not name:
-            try:
-                user = auth.get_user(user_id)
-                name = user.display_name or ''
-            except:
-                name = email.split('@')[0]  # Use part of email as name if nothing else available
+        # if not name:
+        #     try:
+        #         user = auth.get_user(user_id)
+        #         name = user.display_name or ''
+        #     except:
+        #         name = email.split('@')[0]  # Use part of email as name if nothing else available
         
         # Store user data in session
-        session['user_id'] = user_id
-        session['email'] = email
-        session['name'] = name
+        # session['user_id'] = user_id
+        # session['email'] = email
+        # session['name'] = name
         
-        return jsonify({
-            'success': True,
-            'redirect': url_for('chatbot'),
-            'user': {
-                'id': user_id,
-                'email': email,
-                'name': name
-            }
-        })
+        # return jsonify({
+        #     'success': True,
+        #     'redirect': url_for('chatbot'),
+        #     'user': {
+        #         'id': user_id,
+        #         'email': email,
+        #         'name': name
+        #     }
+        # })
     except Exception as e:
         return jsonify({'error': str(e)}), 401
 
@@ -682,7 +676,7 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('landingpage'))
 
-@app.route('/dasboard')
+@app.route('/dashboard')
 def index():
     return render_template('index.html', active_page='home')
 
@@ -2382,22 +2376,22 @@ def google_callback():
     
     return redirect(url_for('landingpage'))
 
-@app.route('/auth/firebase', methods=['POST'])
-def firebase_auth():
-    data = request.json
-    try:
-        decoded_token = auth.verify_id_token(data.get('uid'))
-        user_id = decoded_token['uid']
-        email = data.get('email')
-        name = data.get('name')
+# @app.route('/auth/firebase', methods=['POST'])
+# def firebase_auth():
+#     data = request.json
+#     try:
+#         decoded_token = auth.verify_id_token(data.get('uid'))
+#         user_id = decoded_token['uid']
+#         email = data.get('email')
+#         name = data.get('name')
 
-        session['user_id'] = user_id
-        session['email'] = email
-        session['name'] = name
+#         session['user_id'] = user_id
+#         session['email'] = email
+#         session['name'] = name
 
-        return jsonify(success=True, message="Firebase Sign-In successful")
-    except Exception as e:
-        return jsonify(success=False, message=str(e))
+#         return jsonify(success=True, message="Firebase Sign-In successful")
+#     except Exception as e:
+#         return jsonify(success=False, message=str(e))
 
 @app.route('/quizpage')
 def quizpage():

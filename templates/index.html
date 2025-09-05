@@ -25,6 +25,49 @@
         /* Due dates in red */
         font-weight: bold;
     }
+    .calendar-container {
+        margin: 0 auto;
+        max-width: 350px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        padding: 24px;
+    }
+    .calendar-header {
+        text-align: center;
+        margin-bottom: 12px;
+    }
+    .calendar-days,
+    #calendar {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        text-align: center;
+    }
+    .calendar-day {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #374151;
+        font-size: 1rem;
+        border-radius: 6px;
+        transition: background 0.2s, color 0.2s;
+    }
+    .calendar-day.today {
+        border: 2px solid #4F46E5;
+        background: #EEF2FF;
+        color: #222;
+        font-weight: bold;
+        box-sizing: border-box;
+    }
+    .calendar-day.due-date {
+        color: #EF4444;
+        font-weight: bold;
+    }
+    .calendar-day.text-gray-300 {
+        color: #d1d5db;
+    }
 </style>
 <style>
     .main-content {
@@ -35,7 +78,8 @@
     }
 
     .welcome-banner {
-        background-color: rgb(14, 41, 163);;
+        /* was solid color; switch to youth-friendly gradient */
+        background: linear-gradient(135deg, #0ea5e9 0%, #4338ca 100%);
         border-radius: 12px;
         padding: 24px;
         color: white;
@@ -43,36 +87,100 @@
         overflow: hidden;
     }
 
+    /* Language selector + trust badges */
+    .banner-top {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: flex-end;
+        margin-bottom: 8px;
+    }
+    .lang-select {
+        appearance: none;
+        background: rgba(255,255,255,0.15);
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.25);
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-size: 14px;
+        backdrop-filter: blur(6px);
+        cursor: pointer;
+    }
+    .trust-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .badge {
+        background: rgba(255,255,255,0.14);
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.25);
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        white-space: nowrap;
+        backdrop-filter: blur(6px);
+    }
+
     .welcome-banner h1 {
         font-size: 24px;
         margin-bottom: 8px;
     }
-
     .welcome-banner p {
         font-size: 14px;
         margin-bottom: 16px;
-        opacity: 0.9;
+        opacity: 0.95;
     }
-
-    .welcome-banner button {
-        background-color: white;
-        color: #000000;
+    .cta-group {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .btn-primary, .btn-secondary {
         border: none;
-        padding: 8px 16px;
-        border-radius: 20px;
+        padding: 10px 16px;
+        border-radius: 999px;
         font-size: 14px;
         cursor: pointer;
-        transition: background-color 0.3s;
+        transition: transform 0.15s ease, background 0.25s ease, color 0.25s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        font-weight: 700;
     }
-
-    .welcome-banner button:hover {
-        background-color: #f0f0f0;
+    .btn-primary {
+        background: #fff;
+        color: #111827;
+    }
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        background: #F3F4F6;
+    }
+    .btn-secondary {
+        background: rgba(255,255,255,0.14);
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.25);
+        backdrop-filter: blur(6px);
+    }
+    .btn-secondary:hover {
+        transform: translateY(-1px);
+        background: rgba(255,255,255,0.22);
+    }
+    .coming-soon {
+        opacity: 0.85;
+        cursor: not-allowed;
     }
 
     .tools-section h2 {
         font-size: 20px;
-        margin-bottom: 16px;
+        margin-bottom: 8px;
         color: rgb(0, 0, 0);
+    }
+    .tools-sub {
+        font-size: 13px;
+        color: #4B5563;
+        margin-bottom: 16px;
     }
 
     .tools-grid {
@@ -80,20 +188,19 @@
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: 20px;
     }
-
     .tool-card {
         background: white;
         border-radius: 12px;
         padding: 24px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        transition: transform 0.3s;
+        transition: transform 0.3s, box-shadow 0.2s;
         cursor: pointer;
+        position: relative;
     }
-
     .tool-card:hover {
         transform: translateY(-4px);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
     }
-
     .tool-card .icon {
         width: 48px;
         height: 48px;
@@ -105,46 +212,39 @@
         font-size: 24px;
     }
 
-    .aptitude .icon {
-        background-color: #e3f2fd;
-        color: #1976d2;
-    }
+    /* New feature colorways */
+    .learning .icon { background-color: #e0f2fe; color: #0284c7; }
+    .simulator .icon { background-color: #ecfeff; color: #0891b2; }
+    .scam .icon { background-color: #fff1f2; color: #e11d48; }
+    .risk .icon { background-color: #fef9c3; color: #b45309; }
+    .rights .icon { background-color: #e0e7ff; color: #4338ca; }
+    .badges .icon { background-color: #f0fdf4; color: #16a34a; }
 
-    .flashcard .icon {
-        background-color: #f3e5f5;
-        color: #7b1fa2;
+    .edu-banner {
+        background: #F9FAFB;
+        color: #111827;
+        border: 1px dashed #E5E7EB;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 13px;
+        margin-bottom: 16px;
     }
+    .edu-banner b { color: #111827; }
 
-    .datastructure .icon {
-        background-color: #e8f5e9;
-        color: #2e7d32;
-    }
+    /* Preserve existing variants */
+    .aptitude .icon { background-color: #e3f2fd; color: #1976d2; }
+    .flashcard .icon { background-color: #f3e5f5; color: #7b1fa2; }
+    .datastructure .icon { background-color: #e8f5e9; color: #2e7d32; }
+    .english .icon { background-color: #fff3e0; color: #ef6c00; }
+    .notes .icon { background-color: #fce4ec; color: #c2185b; }
+    .calendar .icon { background-color: #f3e5f5; color: #6a1b9a; }
+    .tool-card h3 { font-size: 18px; margin-bottom: 8px; color: rgb(0, 0, 0); }
+    .tool-card p { font-size: 14px; color: #000000; line-height: 1.5; }
 
-    .english .icon {
-        background-color: #fff3e0;
-        color: #ef6c00;
-    }
-
-    .notes .icon {
-        background-color: #fce4ec;
-        color: #c2185b;
-    }
-
-    .calendar .icon {
-        background-color: #f3e5f5;
-        color: #6a1b9a;
-    }
-
-    .tool-card h3 {
-        font-size: 18px;
-        margin-bottom: 8px;
-        color: rgb(0, 0, 0);
-    }
-
-    .tool-card p {
-        font-size: 14px;
-        color: #000000;
-        line-height: 1.5;
+    @media (max-width: 480px) {
+        .welcome-banner h1 { font-size: 20px; }
+        .btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+        .banner-top { justify-content: space-between; }
     }
 </style>
 
@@ -153,28 +253,97 @@
         <div class="container">
             <div class="main-content">
                 <div class="welcome-banner">
-                    <h1>Welcome to FinBuddy - Your AI Powered Financial Advisor</h1>
-                    <p>Access powerful learning tools designed to enhance your financial literacy journey</p>
-                    <button><b>EXPLORE TOOLS →</b></button>
+                    <!-- language + quick controls -->
+                    <div class="banner-top">
+                        <select id="langSelect" class="lang-select" aria-label="Select Language">
+                            <option value="en">English</option>
+                            <option value="hi">हिंदी (Hindi)</option>
+                            <option value="mr">मराठी (Marathi)</option>
+                            <option value="gu">ગુજરાતી (Gujarati)</option>
+                            <option value="ta">தமிழ் (Tamil)</option>
+                            <option value="bn">বাংলা (Bengali)</option>
+                        </select>
+                    </div>
+
+                    <h1>Welcome to FinBuddy — Learn. Simulate. Stay Safe.</h1>
+                    <p>Multilingual, SEBI-aligned learning with safe simulations and scam awareness for India’s retail investors.</p>
+                    <div class="cta-group">
+                        <button class="btn-primary" onclick="scrollToTools()"><b>Start Learning</b> →</button>
+                        <a href="#" class="btn-secondary coming-soon" aria-disabled="true" onclick="return false;"><b>Try Simulator (Coming Soon)</b></a>
+                    </div>
+                    <div class="trust-badges">
+                        <span class="badge">SEBI/NISM aligned</span>
+                        <span class="badge">15-min delayed data</span>
+                        <span class="badge">Education-only</span>
+                        <span class="badge">हिंदी • मराठी • ગુજરાતી • தமிழ் • বাংলা</span>
+                    </div>
                 </div>
 
-                <div class="tools-section">
-                    <h2>Available Features & Tools</h2><a href="{{ url_for('select_quiz') }}">
+                <div class="tools-section" id="tools">
+                    <h2>Available Features & Tools</h2>
+                    <div class="tools-sub">Educate, engage, and empower retail investors — multilingual and SEBI-aligned.</div>
+                    <div class="edu-banner">
+                        <b>Education-only:</b> This platform does not provide investment advice. Content references SEBI/NISM/IPF sources for learning.
+                    </div>
+
+                    <!-- New priority features -->
                     <div class="tools-grid">
-                        <div class="tool-card aptitude">
-                            <div class="icon">🧮</div>
-                            <h3><b>Quiz / Assessments</b></h3>
-                            <p>Enhance your logical reasoning and problem-solving skills with targeted practice tests
-                            </p>
-                        </div></a>
+                        <a href="{{ url_for('courses') }}">
+                            <div class="tool-card learning">
+                                <div class="icon">📚</div>
+                                <h3><b>Learning Hub (Multi-language)</b></h3>
+                                <p>Bite-sized modules on basics, risks, diversification, and advanced topics with NISM/NFLQ-style quizzes.</p>
+                            </div>
+                        </a>
+
+                        <a href="#" onclick="return false;" aria-disabled="true">
+                            <div class="tool-card simulator coming-soon">
+                                <div class="icon">📈</div>
+                                <h3><b>Virtual Trading Simulator</b> <span class="badge" style="margin-left:6px;">Soon</span></h3>
+                                <p>Practice with ₹1L demo wallet on 15-min delayed NSE/BSE data — safe sandbox to learn by doing.</p>
+                            </div>
+                        </a>
+
+                        <a href="#" onclick="return false;" aria-disabled="true">
+                            <div class="tool-card scam coming-soon">
+                                <div class="icon">🚨</div>
+                                <h3><b>Scam & Fraud Literacy</b> <span class="badge" style="margin-left:6px;">Soon</span></h3>
+                                <p>Interactive “Spot the Scam” cases based on real SEBI enforcement actions. Learn to detect red flags.</p>
+                            </div>
+                        </a>
+
+                        <a href="{{ url_for('select_quiz') }}">
+                            <div class="tool-card risk">
+                                <div class="icon">🧭</div>
+                                <h3><b>Risk Assessment</b></h3>
+                                <p>Short questionnaire to understand your risk persona — Conservative, Moderate, or Aggressive.</p>
+                            </div>
+                        </a>
+
+                        <a href="#progress" onclick="return false;">
+                            <div class="tool-card badges">
+                                <div class="icon">🏆</div>
+                                <h3><b>Progress & Badges</b></h3>
+                                <p>Complete modules and quizzes to earn badges and build your literacy profile.</p>
+                            </div>
+                        </a>
+
+                        <!-- ...existing grid items... -->
+                        <a href="{{ url_for('select_quiz') }}">
+                            <div class="tool-card aptitude">
+                                <div class="icon">🧮</div>
+                                <h3><b>Quiz / Assessments</b></h3>
+                                <p>Enhance your logical reasoning and problem-solving skills with targeted practice tests
+                                </p>
+                            </div>
+                        </a>
                         <a href="{{ url_for('Qna') }}">
-                        <div class="tool-card flashcard">
-                            <div class="icon">🎴</div>
-                            <h3><b>Flash Card Generator</b></h3>
-                            <p>Create custom flashcards to memorize key concepts and test your knowledge effectively</p>
-                        </div>
-                    </a>
-                 
+                            <div class="tool-card flashcard">
+                                <div class="icon">🎴</div>
+                                <h3><b>Flash Card Generator</b></h3>
+                                <p>Create custom flashcards to memorize key concepts and test your knowledge effectively</p>
+                            </div>
+                        </a>
                         <a href="{{ url_for('pdfmanage') }}">
                             <div class="tool-card notes">
                                 <div class="icon">📓</div>
@@ -182,15 +351,13 @@
                                 <p>Organize and manage your study notes with our intelligent note-taking system</p>
                             </div>
                         </a>
-
                         <a href="{{ url_for('notes') }}">
-                        <div class="tool-card calendar">
-                            <div class="icon">📅</div>
-                            <h3><b>Schedule Calendar</b></h3>
-                            <p>Plan your study sessions and track important academic deadlines efficiently</p>
-                        </div>
+                            <div class="tool-card calendar">
+                                <div class="icon">📅</div>
+                                <h3><b>Schedule Calendar</b></h3>
+                                <p>Plan your study sessions and track important academic deadlines efficiently</p>
+                            </div>
                         </a>
-
                         <a href="{{ url_for('research') }}">
                             <div class="tool-card calendar">
                                 <div class="icon">🔍</div>
@@ -198,7 +365,6 @@
                                 <p>Effortlessly find precise answers with our intelligent search tool powered by RAG technology.</p>
                             </div>
                         </a>
-
                         <a href="{{ url_for('courses') }}">
                             <div class="tool-card aptitude">
                                 <div class="icon">📚</div>
@@ -206,13 +372,14 @@
                                 <p>Build essential financial knowledge with our interactive courses and track your progress</p>
                             </div>
                         </a>
-
+                        <!-- ...end existing grid items... -->
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- ...existing right-content and calendar... -->
     <div class="right-content"><br>
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div class="quote-card">
@@ -255,13 +422,32 @@
         form.classList.toggle('hidden');
     }
 
+    // Smooth scroll to tools
+    function scrollToTools() {
+        const el = document.getElementById('tools');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Language preference
+    function initLang() {
+        const sel = document.getElementById('langSelect');
+        if (!sel) return;
+        const saved = localStorage.getItem('np_lang');
+        if (saved) sel.value = saved;
+        document.documentElement.setAttribute('data-lang', sel.value);
+        sel.addEventListener('change', (e) => {
+            localStorage.setItem('np_lang', e.target.value);
+            document.documentElement.setAttribute('data-lang', e.target.value);
+        });
+    }
+
     // Calendar functionality
     let currentDate = new Date();
     const dueDates = [
         {% for note in upcoming_notes %}
-    new Date("{{ note.due_date.strftime('%Y-%m-%d') }}"),
+        new Date("{{ note.due_date.strftime('%Y-%m-%d') }}"),
         {% endfor %}
-        ];
+    ];
 
     function renderCalendar() {
         const calendar = document.getElementById('calendar');
@@ -325,7 +511,8 @@
         renderCalendar();
     }
 
-    // Initial render
+    // Init
+    initLang();
     renderCalendar();
 </script>
 {% endblock %}
